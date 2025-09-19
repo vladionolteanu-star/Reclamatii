@@ -460,17 +460,39 @@
         // STAGE 2: Process metrics for RFM and advanced scoring
         self.postMessage({ type: 'progress', text: 'Calculare metrici Home & Deco...', details: '', percent: 40 });
         let customerMetrics = Object.values(customerMap).map(c => {
-            const sortedTransactions = c.transactions.sort((a, b) => b.date - a.date);
-            const last_purchase = sortedTransactions[0].date;
-            const first_purchase = sortedTransactions[sortedTransactions.length - 1].date;
+            const sortedTransactions = c.transactions.sort((a, b) => a.date - b.date); // Sortare crescătoare pentru intervale
+            const last_purchase = sortedTransactions[sortedTransactions.length - 1].date;
+            const first_purchase = sortedTransactions[0].date;
             const daysSinceLastPurchase = Math.floor((now - last_purchase) / (1000 * 60 * 60 * 24));
             const customerLifetime = Math.floor((last_purchase - first_purchase) / (1000 * 60 * 60 * 24)) || 1;
             
-            // Finalize purchase cycles calculation
+            // --- CALCULE NOI ---
+            // 1. Sezonalitate
+            const seasonality = { 'Iarnă': 0, 'Primăvară': 0, 'Vară': 0, 'Toamnă': 0 };
+            c.transactions.forEach(t => {
+                const month = t.date.getMonth();
+                if ([11, 0, 1].includes(month)) seasonality['Iarnă']++;
+                else if ([2, 3, 4].includes(month)) seasonality['Primăvară']++;
+                else if ([5, 6, 7].includes(month)) seasonality['Vară']++;
+                else seasonality['Toamnă']++;
+            });
+            const preferredSeason = Object.keys(seasonality).reduce((a, b) => seasonality[a] > seasonality[b] ? a : b);
+
+            // 2. Interval mediu de cumpărare
+            let avgPurchaseInterval = 0;
+            if (sortedTransactions.length > 1) {
+                const intervals = [];
+                for (let i = 1; i < sortedTransactions.length; i++) {
+                    const diff = (sortedTransactions[i].date - sortedTransactions[i - 1].date) / (1000 * 60 * 60 * 24);
+                    if (diff > 0) intervals.push(diff);
+                }
+                avgPurchaseInterval = Math.round(intervals.reduce((a, b) => a + b, 0) / (intervals.length || 1));
+            }
+            // --- FINAL CALCULE NOI ---
+
             c.purchase_cycles = Math.round(c.purchase_cycles);
             if (c.purchase_cycles < 1) c.purchase_cycles = 1;
             
-            // Calculate three-axis trend
             const monthKeys = Object.keys(c.monthly_purchases).sort();
             let freqTrend = 0, valueTrend = 0, monetaryTrend = 0;
             
@@ -480,54 +502,35 @@
                 const secondHalf = monthKeys.slice(midPoint);
                 
                 if (firstHalf.length > 0 && secondHalf.length > 0) {
-                    // Frequency trend
                     const avgIntervalFirst = firstHalf.length > 1 ? 30 / firstHalf.length : 30;
                     const avgIntervalSecond = secondHalf.length > 1 ? 30 / secondHalf.length : 30;
                     freqTrend = ((avgIntervalFirst - avgIntervalSecond) / avgIntervalFirst) * 100;
-                    
-                    // Value trend
                     const avgFirst = firstHalf.reduce((sum, k) => sum + c.monthly_purchases[k], 0) / firstHalf.length;
                     const avgSecond = secondHalf.reduce((sum, k) => sum + c.monthly_purchases[k], 0) / secondHalf.length;
                     valueTrend = ((avgSecond - avgFirst) / Math.max(1, avgFirst)) * 100;
-                    
-                    // Monetary trend
                     monetaryTrend = (valueTrend * 0.6 + freqTrend * 0.4);
                 }
             }
             
-            // Determine customer type
             let customerType = 'Standard';
             if (c.large_purchases >= 2) customerType = 'Premium';
             else if (c.large_purchases >= 1) customerType = 'Valuable';
             else if (c.product_categories.size >= 3) customerType = 'Diverse';
             
-            // Check if has valid email
-            const hasValidEmail = c.email && 
-                                  c.email !== 'N/A' && 
-                                  c.email.toLowerCase() !== 'na' && 
-                                  c.email.toLowerCase() !== 'null' &&
-                                  c.email.includes('@');
+            const hasValidEmail = c.email && c.email !== 'N/A' && c.email.toLowerCase() !== 'na' && c.email.toLowerCase() !== 'null' && c.email.includes('@');
             
             return {
-                id: c.id,
-                email: c.email,
-                has_email: hasValidEmail,
-                recency: daysSinceLastPurchase,
-                frequency: c.unique_days.size,
-                monetary: c.total_value,
-                avg_order_value: c.total_value / c.transactions.length,
-                last_purchase: last_purchase,
-                first_purchase: first_purchase,
-                customer_lifetime: customerLifetime,
-                transactions: c.transactions,
-                purchase_cycles: c.purchase_cycles,
-                invoice_count: c.invoice_count,
-                product_categories: c.product_categories.size,
-                customer_type: customerType,
-                trend_frequency: Math.min(100, Math.max(0, 50 + freqTrend)),
-                trend_value: Math.min(100, Math.max(0, 50 + valueTrend/2)),
-                trend_monetary: Math.min(100, Math.max(0, 50 + monetaryTrend)), // <-- AICI ESTE REPARAȚIA
-                purchase_velocity: c.transactions.length / Math.max(1, customerLifetime / 30)
+                id: c.id, email: c.email, has_email: hasValidEmail,
+                recency: daysSinceLastPurchase, frequency: c.unique_days.size,
+                monetary: c.total_value, avg_order_value: c.total_value / c.transactions.length,
+                last_purchase: last_purchase, first_purchase: first_purchase,
+                customer_lifetime: customerLifetime, transactions: c.transactions,
+                purchase_cycles: c.purchase_cycles, invoice_count: c.invoice_count,
+                product_categories: c.product_categories.size, customer_type: customerType,
+                trend_monetary: Math.min(100, Math.max(0, 50 + monetaryTrend)), 
+                // Date noi pentru analiză:
+                preferred_season: preferredSeason,
+                avg_purchase_interval: avgPurchaseInterval
             };
         });
 
@@ -1379,7 +1382,7 @@ function getFilteredData() {
     function hideLoading() {
         document.getElementById('loadingOverlay').style.display = 'none';
     }
-  // --- FUNCȚII PENTRU POVESTEA CLIENTULUI ---
+      // --- FUNCȚII PENTRU POVESTEA CLIENTULUI (v2.0 - INTELIGENTĂ) ---
 
     function showStoryModal(storyHtml) {
         document.getElementById('storyContent').innerHTML = storyHtml;
@@ -1394,45 +1397,63 @@ function getFilteredData() {
         const c = customersData.find(cust => cust.id == customerId);
         if (!c) return;
 
-        let story = [];
-        const lifetimeYears = (c.customer_lifetime / 365).toFixed(1);
-        const recencyMonths = (c.recency / 30).toFixed(1);
         const trend = Math.round(c.score_components.trend);
+        let storyHtml = '';
 
-        // Paragraf 1: Introducere și Status
-        let intro = `Clientul <strong>${c.id}</strong> este clasificat ca <strong>${c.segment}</strong>, cu un scor de valoare de <strong>${c.score}</strong>. Este un client cu o vechime de aproximativ <strong>${lifetimeYears} ani</strong> și o valoare totală a comenzilor de <strong>${c.monetary.toFixed(0)} RON</strong>.`;
-        if (c.recency > 30) {
-            intro += ` În prezent, este inactiv de circa <strong>${recencyMonths} luni</strong>.`;
+        // --- Titlu Dinamic ---
+        let title = `Profil Client: <strong>${c.segment}</strong>`;
+        if (c.segment === 'Lost' && trend > 70) {
+            title = `<span class="text-yellow-400">Alertă: Oportunitate Majoră (Campion Pierdut)</span>`;
+        } else if (c.segment === 'Complaint Risk') {
+             title = `<span class="text-red-400">Alertă: Risc de Pierdere (Post-Reclamație)</span>`;
+        }
+        storyHtml += `<h3 class="text-base font-bold mb-3">${title}</h3>`;
+
+        // --- Sumar Executiv ---
+        storyHtml += `<p class="text-xs text-gray-400 italic mb-4">Client cu o vechime de <strong>${(c.customer_lifetime / 365).toFixed(1)} ani</strong>, inactiv de <strong>${c.recency} zile</strong>, valoare totală <strong>${c.monetary.toFixed(0)} RON</strong>.</p>`;
+        
+        // --- Analiză Financiară ---
+        storyHtml += `<div class="p-3 rounded-lg bg-black/30">`;
+        storyHtml += `<h4 class="font-bold text-green-500 text-sm mb-2">Analiză Financiară</h4>`;
+        storyHtml += `<p>Cu o valoare totală de <strong>${c.monetary.toFixed(0)} RON</strong> și o valoare medie per comandă de <strong>${c.avg_order_value.toFixed(0)} RON</strong>, clientul se încadrează în categoria <strong>${c.customer_type}</strong>. `;
+        storyHtml += `Evoluția sa financiară a avut un trend de <strong>${trend}/100</strong>, indicând o traiectorie ${trend > 60 ? '<strong>puternic pozitivă</strong>' : trend > 40 ? '<strong>stabilă</strong>' : '<strong>negativă</strong>'} în perioada sa activă.</p>`;
+        storyHtml += `</div>`;
+
+        // --- Analiză Comportamentală ---
+        storyHtml += `<div class="p-3 rounded-lg bg-black/30 mt-3">`;
+        storyHtml += `<h4 class="font-bold text-green-500 text-sm mb-2">Analiză Comportamentală</h4>`;
+        storyHtml += `<p>Clientul cumpără de obicei la un interval mediu de <strong>${c.avg_purchase_interval} zile</strong>. Sezonul său preferat de cumpărături este <strong>${c.preferred_season}</strong>. `;
+        storyHtml += `Având în vedere că ultima achiziție a fost acum <strong>${c.recency} zile</strong>, ${c.recency > c.avg_purchase_interval ? 'a depășit deja acest interval, indicând un risc crescut de pierdere.' : 'se apropie de momentul optim pentru o nouă achiziție.'}</p>`;
+        storyHtml += `</div>`;
+
+        // --- Analiză Risc & Reclamații ---
+        if(c.has_complaint) {
+            storyHtml += `<div class="p-3 rounded-lg bg-black/30 mt-3">`;
+            storyHtml += `<h4 class="font-bold text-red-500 text-sm mb-2">Analiză Risc & Reclamații</h4>`;
+            storyHtml += `<p>A înregistrat <strong>${c.complaints.length}</strong> reclamație(i). Statutul său post-reclamație este <strong>${c.no_orders_after_complaint ? 'PIERDUT' : 'ACTIV'}</strong>, ceea ce îl plasează într-o zonă de risc ce necesită atenție.</p>`;
+            storyHtml += `</div>`;
+        }
+
+        // --- Sinteză Strategică ---
+        let recommendation = '';
+        if (c.segment === 'Lost' && trend > 70 && c.monetary > 10000) {
+            recommendation = `<strong>Prioritate Maximă de Reactivare.</strong> Contactați personalizat, posibil cu o ofertă exclusivă care să adreseze o nevoie din trecut. Potențialul de revenire este foarte mare.`;
+        } else if (c.recency >= c.avg_purchase_interval && c.avg_purchase_interval > 0 && c.segment !== 'Lost') {
+            recommendation = `<strong>Acțiune Imediată de Retenție.</strong> Clientul a depășit intervalul său normal de cumpărare. Contactați-l acum cu o ofertă relevantă pentru sezonul <strong>${c.preferred_season}</strong> pentru a preveni pierderea.`;
+        } else if (c.segment === 'VIP Champions') {
+            recommendation = `<strong>Menținere Relație Premium.</strong> Acesta este un client de top, activ și loial. Acțiunile trebuie să se concentreze pe oferte exclusive, recunoașterea loialității și noutăți în avanpremieră.`;
+        } else if (c.segment === 'Complaint Risk') {
+             recommendation = `<strong>Acțiune de "Customer Care".</strong> Client fragil din cauza unei experiențe negative. Orice contact trebuie să fie non-comercial inițial, focusat pe restabilirea încrederii, înainte de a propune o nouă achiziție.`;
         } else {
-            intro += ` Ultima sa achiziție a fost <strong>recentă</strong>.`;
+            recommendation = `<strong>Monitorizare și Nurturing.</strong> Clientul nu este într-o zonă de risc imediat. Continuați comunicarea standard prin newsletter și oferte generale.`;
         }
-        story.push(intro);
+        
+        storyHtml += `<div class="mt-4 p-3 rounded-lg bg-gray-900/50 border border-gray-500/30">`;
+        storyHtml += `<h4 class="font-bold text-gray-300 text-sm mb-2">Sinteză Strategică & Recomandare</h4>`;
+        storyHtml += `<p class="text-gray-400">${recommendation}</p>`;
+        storyHtml += `</div>`;
 
-        // Paragraf 2: Comportament de Cumpărare și Trend
-        let behavior = `Comportamentul său de cumpărare indică un client de tip <strong>${c.customer_type}</strong>, cu o valoare medie a comenzii de <strong>${c.avg_order_value.toFixed(0)} RON</strong>.`;
-        if (trend > 70) {
-            behavior += ` Traiectoria sa în perioada activă a fost <strong>excelentă</strong> (Trend: ${trend}), indicând o creștere semnificativă a valorii și frecvenței.`;
-        } else if (trend > 50) {
-            behavior += ` Evoluția sa a fost una <strong>pozitivă și constantă</strong> (Trend: ${trend}).`;
-        } else if (trend < 40) {
-            behavior += ` Comportamentul său a arătat semne de <strong>declin</strong> în timp (Trend: ${trend}).`;
-        } else {
-            behavior += ` A avut un comportament de cumpărare <strong>stabil</strong> (Trend: ${trend}).`;
-        }
-        story.push(behavior);
-
-        // Paragraf 3: Reclamații (dacă există)
-        if (c.has_complaint) {
-            let conclusion = `Clientul a înregistrat <strong>${c.complaints.length}</strong> reclamație(i). `;
-            if (c.no_orders_after_complaint) {
-                conclusion += `De la ultima reclamație, nu a mai efectuat nicio achiziție, fiind considerat un client <strong>pierdut post-reclamație</strong>.`;
-            } else {
-                conclusion += `Chiar și după reclamații, clientul a rămas <strong>activ</strong>.`;
-            }
-            story.push(conclusion);
-        }
-
-        showStoryModal(story.map(p => `<p>${p}</p>`).join(''));
+        showStoryModal(storyHtml);
     }
 </script>
 </body>
