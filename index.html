@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mobexpert CRM Analytics - Home & Deco Intelligence Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap');
+    
+    * { font-family: 'Inter', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    body { background: #0a0a0a; }
+    
+    #matrixCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+    .login-content { position: relative; z-index: 10; backdrop-filter: blur(12px); background: rgba(0, 0, 0, 0.85); border: 1px solid rgba(34, 197, 94, 0.2); box-shadow: 0 0 40px rgba(34, 197, 94, 0.15); }
+    .dashboard-gradient { background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%); }
+    .card-dark { background: rgba(17, 17, 17, 0.95); border: 1px solid rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); }
+    .input-dark { background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.1); color: #e0e0e0; transition: all 0.3s; }
+    .input-dark:focus { background: rgba(0, 0, 0, 0.7); border-color: rgba(34, 197, 94, 0.5); box-shadow: 0 0 15px rgba(34, 197, 94, 0.2); outline: none; }
+    .btn-cyber { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: #000; font-weight: 600; transition: all 0.3s; position: relative; overflow: hidden; }
+    .btn-cyber:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(34, 197, 94, 0.3); }
+    .btn-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: #fff; font-weight: 600; transition: all 0.3s; padding: 4px 8px; font-size: 11px; border-radius: 4px; }
+    .btn-danger:hover { transform: scale(1.05); box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3); }
+    .table-dark { background: rgba(0, 0, 0, 0.3); }
+    .table-dark thead { background: rgba(34, 197, 94, 0.1); border-bottom: 2px solid rgba(34, 197, 94, 0.2); }
+    .table-dark tbody tr { border-bottom: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.2s; }
+    .table-dark tbody tr:hover { background: rgba(34, 197, 94, 0.05); }
+    .table-container-sticky { max-height: 65vh; overflow-y: auto; }
+    .table-dark thead th { position: sticky; top: 0; background: #111111; }
+    .table-dark tbody tr.no-orders-after-complaint { background: rgba(239, 68, 68, 0.15) !important; }
+    .table-dark tbody tr.no-orders-after-complaint:hover { background: rgba(239, 68, 68, 0.25) !important; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); }
+    ::-webkit-scrollbar-thumb { background: rgba(34, 197, 94, 0.5); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(34, 197, 94, 0.7); }
+    .mobexpert-brand { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 900; font-size: 1.5rem; letter-spacing: -0.02em; }
+    .pagination-btn { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #22c55e; transition: all 0.3s; }
+    .pagination-btn:hover:not(:disabled) { background: rgba(34, 197, 94, 0.2); transform: translateY(-2px); }
+    .pagination-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .segment-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .segment-vip { background: #fbbf24; color: #000; }
+    .segment-loyal { background: #3b82f6; color: #fff; }
+    .segment-growth { background: #8b5cf6; color: #fff; }
+    .segment-newcomer { background: #10b981; color: #fff; }
+    .segment-declining { background: #f97316; color: #fff; }
+    .segment-atrisk { background: #ef4444; color: #fff; }
+    .segment-dormant { background: #6b7280; color: #fff; }
+    .segment-lost { background: #991b1b; color: #fff; }
+    .segment-complaint { background: #dc2626; color: #fff; }
+    .score-tooltip { position: absolute; background: rgba(0, 0, 0, 0.95); border: 1px solid rgba(34, 197, 94, 0.3); padding: 12px; border-radius: 8px; z-index: 10000; min-width: 320px; max-width: 400px; display: none; font-size: 11px; line-height: 1.6; box-shadow: 0 10px 30px rgba(0,0,0,0.8); pointer-events: none; }
+    .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.95); display: none; z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+    .file-item { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); padding: 8px 12px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .filter-badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 4px; }
+    .email-yes { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+    .email-no { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
+  </style>
+</head>
+<body class="bg-black text-gray-100">
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="text-center">
+      <div class="mobexpert-brand text-3xl mb-4">MOBEXPERT CRM</div>
+      <div class="text-green-400 mono text-sm mb-4" id="loadingText">Procesare date...</div>
+      <div class="w-80 bg-gray-900 rounded-full h-2 overflow-hidden border border-green-500/20">
+        <div id="loadingProgress" class="h-2 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+      <div class="mt-4 text-gray-500 text-xs mono" id="loadingDetails"></div>
+    </div>
+  </div>
+
+  <div id="scoreTooltip" class="score-tooltip"></div>
+
+  <div id="passwordOverlay" class="fixed inset-0 bg-black flex items-center justify-center z-50">
+    <canvas id="matrixCanvas"></canvas>
+    <div class="login-content p-10 rounded-2xl shadow-2xl max-w-md w-full mx-4">
+      <div class="text-center mb-8">
+        <h1 class="mobexpert-brand mb-2">MOBEXPERT CRM</h1>
+        <h2 class="text-2xl font-bold text-green-400 mono tracking-wider">HOME & DECO INTELLIGENCE</h2>
+        <p class="text-green-500/40 text-xs mono mt-2">SECURE ACCESS REQUIRED</p>
+      </div>
+      <div class="space-y-6">
+        <input type="password" id="passwordInput" class="w-full p-4 rounded-lg mono text-sm input-dark" placeholder="Enter access code" autocomplete="off">
+        <button onclick="checkPassword()" class="w-full btn-cyber py-4 rounded-lg mono text-sm tracking-wider">AUTHENTICATE</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hidden" id="mainContent">
+    <div class="dashboard-gradient min-h-screen">
+      <div class="p-4 bg-black/30 backdrop-blur-md border-b border-gray-800 sticky top-0 z-10">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center space-x-4">
+            <h1 class="mobexpert-brand">MOBEXPERT CRM</h1>
+            <span class="text-gray-500 text-xs mono">v5.0 HOME & DECO</span>
+          </div>
+          <div class="flex items-center space-x-4">
+            <button onclick="exportResults()" class="btn-cyber px-4 py-2 rounded-lg text-sm">Export CSV</button>
+            <div class="text-xs text-gray-400 mono">
+              <span id="totalCustomers">0</span> clienți | 
+              <span id="totalTransactions">0</span> tranzacții | 
+              <span class="filter-badge email-yes">Cu email: <span id="withEmail">0</span></span>
+              <span class="filter-badge email-no">Fără email: <span id="withoutEmail">0</span></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-7 gap-4">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1 mono">DATE VÂNZĂRI (CSV)</label>
+            <input type="file" id="salesCsvInput" multiple accept=".csv" class="w-full text-xs text-gray-400 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-500 file:transition-all">
+            <div id="filesList" class="mt-2 max-h-32 overflow-y-auto"></div>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1 mono">RECLAMAȚII (CSV)</label>
+            <input type="file" id="complaintsCsvInput" accept=".csv" class="w-full text-xs text-gray-400 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-red-600 file:text-white hover:file:bg-red-500 file:transition-all">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1 mono">PERIOADA ANALIZĂ</label>
+            <select id="analysisPeriod" class="w-full p-1.5 input-dark rounded text-xs">
+              <option value="all">Toată perioada</option>
+              <option value="6">Ultimii 6 ani</option>
+              <option value="5">Ultimii 5 ani</option>
+              <option value="4">Ultimii 4 ani</option>
+              <option value="3">Ultimii 3 ani</option>
+              <option value="2" selected>Ultimii 2 ani</option>
+              <option value="1">Ultimul an</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1 mono">EMAIL</label>
+            <select id="filterEmail" class="w-full p-1.5 input-dark rounded text-xs">
+              <option value="all">Toți</option>
+              <option value="with">Cu email</option>
+              <option value="without">Fără email</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1 mono">SEGMENT</label>
+            <select id="filterSegment" class="w-full p-1.5 input-dark rounded text-xs">
+              <option value="all">Toate segmentele</option>
+              <option value="VIP Champions">VIP Champions</option>
+              <option value="Loyal Customers">Loyal Customers</option>
+              <option value="Growth Potential">Growth Potential</option>
+              <option value="New Customers">New Customers</option>
+              <option value="Declining">Declining</option>
+              <option value="At Risk">At Risk</option>
+              <option value="Dormant">Dormant</option>
+              <option value="Lost">Lost</option>
+              <option value="Complaint Risk">Complaint Risk</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs text-gray-400 mb-1 mono invisible">Bifa</label> <div class="flex items-center h-full">
+              <label for="filterHasComplaint" class="flex items-center space-x-2 text-xs text-gray-400 mono cursor-pointer hover:text-white transition">
+                <input type="checkbox" id="filterHasComplaint" class="w-4 h-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-600 cursor-pointer">
+                <span>CU RECLAMAȚII</span>
+              </label>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1 mono">CĂUTARE</label>
+            <input type="text" id="searchInput" placeholder="ID Client / Email / Segment..." class="w-full p-1.5 input-dark rounded text-xs">
+          </div>
+        </div>
+      </div>
+
+      <div class="p-6">
+        <div id="statsCards" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-8 gap-4 mb-6" style="display: none;">
+          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">Total Clienți</p><p id="statTotalCustomers" class="text-2xl font-bold">0</p></div>
+          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">VIP Champions</p><p id="statChampions" class="text-2xl font-bold text-yellow-400">0</p></div>
+          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">At Risk</p><p id="statAtRisk" class="text-2xl font-bold text-orange-400">0</p></div>
+          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">Lost</p><p id="statLost" class="text-2xl font-bold text-red-400">0</p></div>
+          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">Cu Reclamații</p><p id="statComplaints" class="text-2xl font-bold text-purple-400">0</p></div>
+          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">Pierdut după Recl.</p><p id="statNoOrdersAfterComplaint" class="text-2xl font-bold text-red-500">0</p></div>
+          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">Val. Medie Cmd</p><p id="statAvgValue" class="text-2xl font-bold text-green-400">0</p></div>
+          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">Sezonalitate</p><p id="statSeasonality" class="text-xl font-bold text-blue-400">-</p></div>
+        </div>
+
+        <div class="card-dark rounded-xl">
+          <div class="p-4 border-b border-gray-800">
+            <h3 class="text-lg font-semibold">Analiză Detaliată Clienți - Home & Deco</h3>
+          </div>
+<div class="overflow-x-auto table-container-sticky">
+            <table class="table w-full text-sm table-dark">
+              <thead>
+                <tr class="text-xs mono uppercase tracking-wider text-gray-400">
+                  <th class="px-4 py-3 text-left">#</th>
+                  <th class="px-4 py-3 text-left">ID Client</th>
+                  <th class="px-4 py-3 text-left">Email</th>
+                  <th class="px-4 py-3 text-left">Segment</th>
+                  <th class="px-4 py-3 text-right cursor-help" title="Click pentru detalii">Scor</th>
+                  <th class="px-4 py-3 text-right">Ultima Achiziție</th>
+                  <th class="px-4 py-3 text-right">Zile Inactiv</th>
+                  <th class="px-4 py-3 text-right">Valoare Totală</th>
+                  <th class="px-4 py-3 text-right">Nr. Facturi</th>
+                  <th class="px-4 py-3 text-right">Val. Medie</th>
+                  <th class="px-4 py-3 text-center">Tip Client</th>
+                  <th class="px-4 py-3 text-center">Reclamație</th>
+                  <th class="px-4 py-3 text-left">Status Post-Recl</th>
+                </tr>
+              </thead>
+              <tbody id="customersTableBody" class="text-sm text-gray-300"></tbody>
+            </table>
+          </div>
+          <div id="pagination" class="p-4 border-t border-gray-800"></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <div class="card-dark rounded-xl">
+                <div class="p-4 border-b border-gray-800">
+                    <h2 class="text-lg font-bold text-white">Distribuție Segmente Home & Deco</h2>
+                </div>
+                <div class="p-6">
+                    <canvas id="segmentsChart" style="max-height: 300px;"></canvas>
+                </div>
+            </div>
+            <div class="card-dark rounded-xl">
+                <div class="p-4 border-b border-gray-800">
+                    <h2 class="text-lg font-bold text-white">Impact Reclamații & Trend</h2>
+                </div>
+                <div class="p-6">
+                    <canvas id="complaintsChart" style="max-height: 300px;"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-dark rounded-xl mt-6">
+            <div class="p-4 border-b border-gray-800">
+                <h2 class="text-lg font-bold text-white">📊 Metodologie Adaptată Mobexpert</h2>
+            </div>
+            <div class="p-6 space-y-4 text-sm">
+                <div class="bg-black/30 p-4 rounded-lg">
+                    <h3 class="text-green-400 font-bold mb-2">Segmentare RFM pentru Home & Deco</h3>
+                    <div class="grid grid-cols-3 gap-4 text-xs">
+                        <div class="bg-gray-900/50 p-3 rounded">
+                            <strong class="text-yellow-400">Recency (R)</strong><br>
+                            • 0-6 luni: R=5<br>
+                            • 6-12 luni: R=4<br>
+                            • 1-2 ani: R=3<br>
+                            • 2-4 ani: R=2<br>
+                            • >4 ani: R=1
+                        </div>
+                        <div class="bg-gray-900/50 p-3 rounded">
+                            <strong class="text-blue-400">Frequency (F) - Nr. Facturi</strong><br>
+                            • 1 factură: F=1<br>
+                            • 2-3 facturi: F=2<br>
+                            • 4-6 facturi: F=3<br>
+                            • 7-12 facturi: F=4<br>
+                            • 13+ facturi: F=5
+                        </div>
+                        <div class="bg-gray-900/50 p-3 rounded">
+                            <strong class="text-purple-400">Monetary (M) - Val. Medie</strong><br>
+                            • <500 RON: M=1<br>
+                            • 500-2000 RON: M=2<br>
+                            • 2000-5000 RON: M=3<br>
+                            • 5000-10000 RON: M=4<br>
+                            • >10000 RON: M=5
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-black/30 p-4 rounded-lg">
+                    <h3 class="text-green-400 font-bold mb-2">Scor Complex Adaptat (0-100)</h3>
+                    <ul class="text-xs space-y-1 text-gray-400">
+                        <li>• <strong>Recența (30%)</strong>: Focus pe clienții recenți (normalizat pe 2 ani)</li>
+                        <li>• <strong>Val. Medie/Comandă (25%)</strong>: Identifică clienții cu comenzi mari</li>
+                        <li>• <strong>Cross-sell (15%)</strong>: Câte categorii de produse a cumpărat</li>
+                        <li>• <strong>Vechime (10%)</strong>: Loialitate pe termen lung</li>
+                        <li>• <strong>Tip Produs (10%)</strong>: Mobilier principal vs decorațiuni</li>
+                        <li>• <strong>Trend (5%)</strong>: Evoluție frecvență și valoare</li>
+                        <li>• <strong>Frecvență Facturi (5%)</strong>: Număr total de facturi emise</li>
+                    </ul>
+                </div>
+
+                <div class="bg-gradient-to-r from-green-900/20 to-blue-900/20 p-4 rounded-lg border border-green-500/30">
+                    <p class="text-xs text-gray-300">
+                        <strong class="text-green-400">📌 Praguri Valoare Mobexpert:</strong><br>
+                        • Achiziție mică (decorațiuni): <500 RON<br>
+                        • Achiziție medie (mobilier mic): 500-2500 RON<br>
+                        • Achiziție mare (mobilier principal): >6000 RON<br>
+                        • Client pierdut: fără comenzi >2 ani<br>
+                        • Complaint Risk: fără comenzi în 18 luni după reclamație
+                    </p>
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+    // --- START: MOBEXPERT WORKER CODE (FROM PART 1) ---
+    const workerCode = `
+      self.onmessage = function(e) {
+        const { salesData, complaintsData, analysisPeriod } = e.data;
+        const now = new Date();
+        let cutoffDate = null;
+        if (analysisPeriod !== 'all') {
+            cutoffDate = new Date();
+            cutoffDate.setFullYear(now.getFullYear() - parseInt(analysisPeriod));
+        }
+
+        // Helper function to parse dates with multiple formats
+        function parseDate(dateStr) {
+            if (!dateStr || dateStr === 'Invalid Date' || dateStr === 'null' || dateStr === 'NA' || dateStr === '#N/A') {
+                return null;
+            }
+            
+            const str = dateStr.toString().trim();
+            
+            // Try different formats
+            const formats = [
+                // dd.mm.yyyy
+                () => {
+                    const parts = str.split('.');
+                    if (parts.length === 3) {
+                        const day = parseInt(parts[0], 10);
+                        const month = parseInt(parts[1], 10) - 1;
+                        const year = parseInt(parts[2], 10);
+                        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                            return new Date(year, month, day);
+                        }
+                    }
+                    return null;
+                },
+                // dd/mm/yyyy
+                () => {
+                    const parts = str.split('/');
+                    if (parts.length === 3) {
+                        // Check if it's dd/mm/yyyy or mm/dd/yyyy
+                        const part1 = parseInt(parts[0], 10);
+                        const part2 = parseInt(parts[1], 10);
+                        const year = parseInt(parts[2], 10);
+                        
+                        // Assume dd/mm/yyyy if first part > 12
+                        if (part1 > 12 || part2 <= 12) {
+                            return new Date(year, part2 - 1, part1);
+                        } else {
+                            return new Date(year, part1 - 1, part2);
+                        }
+                    }
+                    return null;
+                },
+                // yyyy-mm-dd
+                () => {
+                    if (str.match(/^\\d{4}-\\d{2}-\\d{2}/)) {
+                        const d = new Date(str);
+                        return isNaN(d.getTime()) ? null : d;
+                    }
+                    return null;
+                },
+                // Direct parse as last resort
+                () => {
+                    const d = new Date(str);
+                    return isNaN(d.getTime()) ? null : d;
+                }
+            ];
+            
+            for (const formatter of formats) {
+                try {
+                    const d = formatter();
+                    if (d && !isNaN(d.getTime()) && d.getFullYear() > 1900 && d.getFullYear() < 2100) {
+                        return d;
+                    }
+                } catch (e) {
+                    continue;
+                }
+            }
+            
+            return null;
+        }
+
+        // STAGE 1: Aggregate sales data
+        self.postMessage({ type: 'progress', text: 'Agregare tranzacții...', details: '0%', percent: 10 });
+        const customerMap = {};
+        let totalInvoices = 0;
+        
+        for (let i = 0; i < salesData.length; i++) {
+          const sale = salesData[i];
+          const saleDate = parseDate(sale.date);
+          
+          if (!saleDate) continue;
+          if (cutoffDate && saleDate < cutoffDate) continue;
+
+          if (!customerMap[sale.id]) {
+            customerMap[sale.id] = { 
+              id: sale.id, 
+              email: 'N/A', 
+              transactions: [], 
+              total_value: 0, 
+              unique_days: new Set(),
+              monthly_purchases: {},
+              purchase_cycles: 0,
+              small_purchases: 0,
+              large_purchases: 0,
+              product_categories: new Set(),
+              invoice_count: 0
+            };
+          }
+          const customer = customerMap[sale.id];
+          customer.transactions.push({ date: saleDate, value: sale.value, invoices: sale.invoices || 1 });
+          customer.total_value += sale.value;
+          customer.unique_days.add(sale.date);
+          customer.invoice_count += (sale.invoices || 1);
+          totalInvoices += (sale.invoices || 1);
+          
+          // Calculate purchase cycles based on invoice frequency
+          const invoiceContribution = sale.invoices || 1;
+          customer.purchase_cycles += invoiceContribution * 0.3; // Each invoice contributes to cycles
+          
+          // Categorize purchases
+          if (sale.value >= 6000) {
+            customer.large_purchases++;
+            customer.product_categories.add('mobilier_principal');
+          } else if (sale.value >= 500) {
+            customer.product_categories.add('mobilier_mic');
+          } else {
+            customer.product_categories.add('decoratiuni');
+          }
+          
+          // Track monthly for seasonality
+          const monthKey = saleDate.getFullYear() + '-' + (saleDate.getMonth() + 1);
+          customer.monthly_purchases[monthKey] = (customer.monthly_purchases[monthKey] || 0) + sale.value;
+
+          // Handle email
+          const emailStr = String(sale.email || '').trim();
+          if (emailStr &&
+              emailStr.toLowerCase() !== 'n/a' &&
+              emailStr.toLowerCase() !== 'na' &&
+              emailStr.toLowerCase() !== 'null' &&
+              emailStr !== '#N/A' &&
+              emailStr !== '#null') {
+            customer.email = emailStr;
+          }
+
+          if (i % 10000 === 0) {
+              const progress = Math.floor((i / salesData.length) * 30);
+              self.postMessage({ 
+                type: 'progress', 
+                text: 'Agregare tranzacții...', 
+                details: \`\${i.toLocaleString('ro-RO')} / \${salesData.length.toLocaleString('ro-RO')}\`, 
+                percent: 10 + progress 
+              });
+          }
+        }
+
+        // STAGE 2: Process metrics for RFM and advanced scoring
+        self.postMessage({ type: 'progress', text: 'Calculare metrici Home & Deco...', details: '', percent: 40 });
+        let customerMetrics = Object.values(customerMap).map(c => {
+            const sortedTransactions = c.transactions.sort((a, b) => b.date - a.date);
+            const last_purchase = sortedTransactions[0].date;
+            const first_purchase = sortedTransactions[sortedTransactions.length - 1].date;
+            const daysSinceLastPurchase = Math.floor((now - last_purchase) / (1000 * 60 * 60 * 24));
+            const customerLifetime = Math.floor((last_purchase - first_purchase) / (1000 * 60 * 60 * 24)) || 1;
+            
+            // Finalize purchase cycles calculation
+            c.purchase_cycles = Math.round(c.purchase_cycles);
+            if (c.purchase_cycles < 1) c.purchase_cycles = 1;
+            
+            // Calculate three-axis trend
+            const monthKeys = Object.keys(c.monthly_purchases).sort();
+            let freqTrend = 0, valueTrend = 0, monetaryTrend = 0;
+            
+            if (monthKeys.length > 1) {
+                const midPoint = Math.floor(monthKeys.length / 2);
+                const firstHalf = monthKeys.slice(0, midPoint);
+                const secondHalf = monthKeys.slice(midPoint);
+                
+                if (firstHalf.length > 0 && secondHalf.length > 0) {
+                    // Frequency trend
+                    const avgIntervalFirst = firstHalf.length > 1 ? 30 / firstHalf.length : 30;
+                    const avgIntervalSecond = secondHalf.length > 1 ? 30 / secondHalf.length : 30;
+                    freqTrend = ((avgIntervalFirst - avgIntervalSecond) / avgIntervalFirst) * 100;
+                    
+                    // Value trend
+                    const avgFirst = firstHalf.reduce((sum, k) => sum + c.monthly_purchases[k], 0) / firstHalf.length;
+                    const avgSecond = secondHalf.reduce((sum, k) => sum + c.monthly_purchases[k], 0) / secondHalf.length;
+                    valueTrend = ((avgSecond - avgFirst) / Math.max(1, avgFirst)) * 100;
+                    
+                    // Monetary trend
+                    monetaryTrend = (valueTrend * 0.6 + freqTrend * 0.4);
+                }
+            }
+            
+            // Determine customer type
+            let customerType = 'Standard';
+            if (c.large_purchases >= 2) customerType = 'Premium';
+            else if (c.large_purchases >= 1) customerType = 'Valuable';
+            else if (c.product_categories.size >= 3) customerType = 'Diverse';
+            
+            // Check if has valid email
+            const hasValidEmail = c.email && 
+                                  c.email !== 'N/A' && 
+                                  c.email.toLowerCase() !== 'na' && 
+                                  c.email.toLowerCase() !== 'null' &&
+                                  c.email.includes('@');
+            
+            return {
+                id: c.id,
+                email: c.email,
+                has_email: hasValidEmail,
+                recency: daysSinceLastPurchase,
+                frequency: c.unique_days.size,
+                monetary: c.total_value,
+                avg_order_value: c.total_value / c.transactions.length,
+                last_purchase: last_purchase,
+                first_purchase: first_purchase,
+                customer_lifetime: customerLifetime,
+                transactions: c.transactions,
+                purchase_cycles: c.purchase_cycles,
+                invoice_count: c.invoice_count,
+                product_categories: c.product_categories.size,
+                customer_type: customerType,
+                trend_frequency: Math.min(100, Math.max(0, 50 + freqTrend)),
+                trend_value: Math.min(100, Math.max(0, 50 + valueTrend/2)),
+                trend_monetary: Math.min(100, Math.max(0, 50 + monetaryTrend)), // <-- AICI ESTE REPARAȚIA
+                purchase_velocity: c.transactions.length / Math.max(1, customerLifetime / 30)
+            };
+        });
+
+        // Continue with RFM scoring...
+        self.postMessage({ type: 'progress', text: 'Calculare scoruri RFM...', details: '', percent: 50 });
+    `;
+    // --- END: WORKER CODE PART 1 ---
+    
+    // Password check function (needed here for button to work)
+    function checkPassword() {
+        const password = document.getElementById('passwordInput').value;
+        if (password === '333') {
+            document.getElementById('passwordOverlay').style.display = 'none';
+            document.getElementById('mainContent').classList.remove('hidden');
+            setupEventListeners();
+        } else {
+            document.getElementById('passwordInput').style.animation = 'shake 0.5s';
+            setTimeout(() => {
+                document.getElementById('passwordInput').style.animation = '';
+                document.getElementById('passwordInput').value = '';
+            }, 500);
+        }
+    }
+    
+    // Placeholder for setupEventListeners (will be defined in part 2)
+    function setupEventListeners() {
+        // This will be properly defined in part 2
+    }
+
+    // --- START: CONTENT FROM PART 2 SCRIPT ---
+    const workerCodePart2 = `
+        // RFM Score Functions
+        const getRecencyScore = (days) => {
+          if (days <= 180) return 5;     // 0-6 months
+          if (days <= 365) return 4;     // 6-12 months
+          if (days <= 730) return 3;     // 1-2 years
+          if (days <= 1460) return 2;    // 2-4 years
+          return 1;                      // >4 years
+        };
+        
+        const getFrequencyScore = (cycles) => {
+          if (cycles === 0) return 1;
+          if (cycles <= 1) return 2;
+          if (cycles <= 3) return 3;
+          if (cycles <= 6) return 4;
+          return 5;  // 7+ cycles
+        };
+        
+        const getMonetaryScore = (avgValue) => {
+          if (avgValue < 500) return 1;
+          if (avgValue < 2000) return 2;
+          if (avgValue < 5000) return 3;
+          if (avgValue < 10000) return 4;
+          return 5;
+        };
+
+        let customersData = customerMetrics.map(c => {
+            const rfm = {
+              r: getRecencyScore(c.recency),
+              f: getFrequencyScore(c.purchase_cycles),
+              m: getMonetaryScore(c.avg_order_value)
+            };
+            return {...c, rfm_score: rfm };
+        });
+        customerMetrics = null; // Free memory
+
+        // STAGE 4: Determine Segments & Complex Score
+        self.postMessage({ type: 'progress', text: 'Calcul scor complex și segmentare...', details: '', percent: 70 });
+        
+        const determineSegment = (r, f, m, recency, cycles) => {
+          // VIP Champions - best customers
+          if (r >= 4 && f >= 4 && m >= 3) return 'VIP Champions';
+          
+          // Loyal Customers - regular buyers
+          if (r >= 3 && f >= 3) return 'Loyal Customers';
+          
+          // Growth Potential - recent but low frequency
+          if (r >= 4 && f <= 2) return 'Growth Potential';
+          
+          // New Customers - very recent, first purchases
+          if (r >= 4 && cycles <= 1) return 'New Customers';
+          
+          // Declining - decreasing engagement
+          if (r === 3 && f <= 2) return 'Declining';
+          
+          // At Risk - valuable but inactive
+          if (r <= 2 && (f >= 3 || m >= 3)) return 'At Risk';
+          
+          // Dormant - long inactive
+          if (r <= 2 && f <= 2) return 'Dormant';
+          
+          // Lost - very long inactive
+          if (r === 1 || recency > 730) return 'Lost';
+          
+          return 'At Risk';
+        };
+        
+        const calculateMobexpertScore = (customer) => {
+            // MOBEXPERT ADAPTED SCORING (0-100)
+            
+            // 1. Recency - 30% (normalized on 2 years for home & deco)
+            const recencyScore = Math.max(0, 100 - (customer.recency * (100/730)));
+            
+            // 2. Average Order Value - 25%
+            const avgOrderScore = Math.min(100, Math.log10(customer.avg_order_value + 1) * 22);
+            
+            // 3. Cross-sell (product categories) - 15%
+            const crossSellScore = Math.min(100, customer.product_categories * 25);
+            
+            // 4. Customer Lifetime - 10%
+            const lifetimeScore = Math.min(100, Math.log10(customer.customer_lifetime + 1) * 23);
+            
+            // 5. Product Type Impact - 10%
+            let productScore = 50;
+            if (customer.customer_type === 'Premium') productScore = 100;
+            else if (customer.customer_type === 'Valuable') productScore = 80;
+            else if (customer.customer_type === 'Diverse') productScore = 70;
+            
+            // 6. Trend (3-axis combined) - 5%
+            const trendScore = (customer.trend_frequency * 0.4 + 
+                                customer.trend_value * 0.4 + 
+                                customer.trend_monetary * 0.2) / 100 * 100;
+            
+            // 7. Purchase Cycles - 5%
+            const cycleScore = Math.min(100, customer.purchase_cycles * 10);
+            
+            const complexScore = (
+                recencyScore * 0.30 +
+                avgOrderScore * 0.25 +
+                crossSellScore * 0.15 +
+                lifetimeScore * 0.10 +
+                productScore * 0.10 +
+                trendScore * 0.05 +
+                cycleScore * 0.05
+            );
+            
+            return {
+                score: Math.round(complexScore),
+                components: {
+                    recency: recencyScore.toFixed(1),
+                    avgOrder: avgOrderScore.toFixed(1),
+                    crossSell: crossSellScore.toFixed(1),
+                    lifetime: lifetimeScore.toFixed(1),
+                    productType: productScore.toFixed(1),
+                    trend: trendScore.toFixed(1),
+                    cycles: cycleScore.toFixed(1)
+                }
+            };
+        };
+
+        customersData = customersData.map(c => {
+            const complexScoring = calculateMobexpertScore(c);
+            return {
+                ...c,
+                segment: determineSegment(c.rfm_score.r, c.rfm_score.f, c.rfm_score.m, c.recency, c.purchase_cycles),
+                score: complexScoring.score,
+                score_components: complexScoring.components
+            };
+        });
+
+        // STAGE 5: Integrate complaints
+        self.postMessage({ type: 'progress', text: 'Integrare reclamații...', details: '', percent: 90 });
+        const complaintsMap = {};
+        
+        for (const complaint of complaintsData) {
+            const complaintDate = parseDate(complaint.date);
+            
+            if (complaintDate) {
+                if (!complaintsMap[complaint.id]) complaintsMap[complaint.id] = [];
+                complaintsMap[complaint.id].push({
+                    ...complaint,
+                    date: complaintDate
+                });
+            }
+        }
+
+        customersData.forEach(customer => {
+            if (complaintsMap[customer.id]) {
+                customer.has_complaint = true;
+                const complaints = complaintsMap[customer.id];
+                customer.complaints = complaints;
+                
+                // Find last complaint date
+                const lastComplaint = complaints.reduce((latest, c) => {
+                    return c.date > latest.date ? c : latest;
+                });
+                customer.last_complaint_date = lastComplaint.date;
+                
+// LOGICĂ RAFINATĂ: Verifică dacă un client e pierdut după reclamație
+                const lastComplaintDate = lastComplaint.date;
+                const hasPurchasesAfter = customer.transactions.some(t => new Date(t.date) > new Date(lastComplaintDate));
+
+                // Perioada de grație: 6 luni. Doar după acest timp îl considerăm "la risc".
+                // Data curentă este 19.09.2025
+                const gracePeriodCutoff = new Date('2025-09-19');
+                gracePeriodCutoff.setMonth(gracePeriodCutoff.getMonth() - 6);
+
+                // Un client este considerat PIERDUT doar dacă:
+                // 1. NU a mai cumpărat nimic după ultima reclamație.
+                // 2. Ultima lui reclamație este MAI VECHE de 6 luni.
+                if (!hasPurchasesAfter && new Date(lastComplaintDate) < gracePeriodCutoff) {
+                    customer.no_orders_after_complaint = true;
+                } else {
+                    customer.no_orders_after_complaint = false;
+                }
+                
+                // Override segment if complaint risk
+                if (customer.no_orders_after_complaint) {
+                    customer.original_segment = customer.segment;
+                    customer.segment = 'Complaint Risk';
+                }
+            } else {
+                customer.has_complaint = false;
+                customer.complaints = [];
+                customer.last_complaint_date = null;
+                customer.no_orders_after_complaint = false;
+            }
+            
+            // Mark as Lost if no purchase in 2+ years
+            if (customer.recency > 730 && customer.segment !== 'Complaint Risk') {
+                customer.segment = 'Lost';
+            }
+        });
+        
+        customersData.sort((a,b) => b.score - a.score);
+        self.postMessage({ type: 'complete', data: customersData, totalInvoices: totalInvoices });
+      };
+    `;
+
+    // Combine worker parts
+    const fullWorkerCode = workerCode + workerCodePart2;
+    
+    // Global variables
+    let customersData = [];
+    let totalTransactions = 0;
+    let currentPage = 1;
+    const rowsPerPage = 50;
+    let segmentsChart = null;
+    let complaintsChart = null;
+    let allFiles = [];
+    
+    // Matrix Rain Effect
+    class MatrixRain {
+        constructor(canvas) {
+            this.canvas = canvas;
+            this.ctx = canvas.getContext('2d');
+            this.resize();
+            this.columns = [];
+            this.init();
+            window.addEventListener('resize', () => this.resize());
+        }
+
+        resize() {
+            this.canvas.width = window.innerWidth;
+            this.canvas.height = window.innerHeight;
+            this.fontSize = 14;
+            this.columnCount = Math.floor(this.canvas.width / this.fontSize);
+        }
+
+        init() {
+            for(let i = 0; i < this.columnCount; i++) {
+                this.columns[i] = Math.floor(Math.random() * this.canvas.height / this.fontSize);
+            }
+        }
+
+        draw() {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            this.ctx.fillStyle = '#22c55e';
+            this.ctx.font = this.fontSize + 'px monospace';
+            
+            for(let i = 0; i < this.columns.length; i++) {
+                const text = String.fromCharCode(Math.floor(Math.random() * 128));
+                const x = i * this.fontSize;
+                const y = this.columns[i] * this.fontSize;
+                
+                this.ctx.fillText(text, x, y);
+                
+                if(y > this.canvas.height && Math.random() > 0.98) {
+                    this.columns[i] = 0;
+                }
+                this.columns[i]++;
+            }
+        }
+    }
+
+    // Start Matrix Rain
+    document.addEventListener('DOMContentLoaded', function() {
+        const matrixCanvas = document.getElementById('matrixCanvas');
+        const matrix = new MatrixRain(matrixCanvas);
+        setInterval(() => matrix.draw(), 35);
+        
+        // Focus password field
+        document.getElementById('passwordInput').focus();
+        document.getElementById('passwordInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') checkPassword();
+        });
+    });
+
+    // Password check (redefined here to be the primary one)
+    function checkPassword() {
+        const password = document.getElementById('passwordInput').value;
+        if (password === '333') {
+            document.getElementById('passwordOverlay').style.display = 'none';
+            document.getElementById('mainContent').classList.remove('hidden');
+            setupEventListeners();
+        } else {
+            document.getElementById('passwordInput').style.animation = 'shake 0.5s';
+            setTimeout(() => {
+                document.getElementById('passwordInput').style.animation = '';
+                document.getElementById('passwordInput').value = '';
+            }, 500);
+        }
+    }
+
+    // Setup event listeners (the full function)
+    function setupEventListeners() {
+        document.getElementById('salesCsvInput').addEventListener('change', handleFileInput);
+        document.getElementById('complaintsCsvInput').addEventListener('change', handleComplaintsInput);
+        document.getElementById('analysisPeriod').addEventListener('change', reprocessData);
+        document.getElementById('filterSegment').addEventListener('change', renderTable);
+        document.getElementById('filterEmail').addEventListener('change', renderTable);
+        document.getElementById('searchInput').addEventListener('input', renderTable);
+        document.getElementById('filterHasComplaint').addEventListener('change', renderTable); // <-- LINIA NOUĂ
+    }
+    // Handle multiple sales files
+    function handleFileInput(event) {
+        const files = Array.from(event.target.files);
+        allFiles = files;
+        displayFiles();
+        
+        if (files.length === 0) return;
+        
+        const complaintsInput = document.getElementById('complaintsCsvInput');
+        if (complaintsInput.files.length > 0) {
+            processCsvFiles(files, complaintsInput.files[0]);
+        }
+    }
+
+    // Display uploaded files
+    function displayFiles() {
+        const filesList = document.getElementById('filesList');
+        filesList.innerHTML = allFiles.map(file => {
+            const size = (file.size / 1024).toFixed(1);
+            return `<div class="file-item">
+                <span class="text-xs">${file.name} (${size} KB)</span>
+                <button onclick="removeFile('${file.name}')" class="btn-danger">×</button>
+            </div>`;
+        }).join('');
+    }
+
+    // Remove file
+    function removeFile(fileName) {
+        allFiles = allFiles.filter(f => f.name !== fileName);
+        displayFiles();
+        
+        // Create new FileList
+        const dt = new DataTransfer();
+        allFiles.forEach(file => dt.items.add(file));
+        document.getElementById('salesCsvInput').files = dt.files;
+        
+        if (allFiles.length === 0) {
+            customersData = [];
+            renderTable();
+            updateStats();
+        } else {
+            const complaintsInput = document.getElementById('complaintsCsvInput');
+            if (complaintsInput.files.length > 0) {
+                processCsvFiles(allFiles, complaintsInput.files[0]);
+            }
+        }
+    }
+
+    // Handle complaints input
+    function handleComplaintsInput(event) {
+        const complaintsFile = event.target.files[0];
+        if (allFiles.length > 0 && complaintsFile) {
+            processCsvFiles(allFiles, complaintsFile);
+        }
+    }
+
+    // Parse date helper
+    function parseDate(dateStr) {
+        if (!dateStr || dateStr === 'Invalid Date' || dateStr === 'null' || dateStr === 'NA') return null;
+        
+        const str = dateStr.toString().trim();
+        
+        // Try dd.mm.yyyy format
+        if (str.includes('.')) {
+            const parts = str.split('.');
+            if (parts.length === 3) {
+                const day = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10) - 1;
+                const year = parseInt(parts[2], 10);
+                if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                    return new Date(year, month, day);
+                }
+            }
+        }
+        
+        // Try dd/mm/yyyy format
+        if (str.includes('/')) {
+            const parts = str.split('/');
+            if (parts.length === 3) {
+                const part1 = parseInt(parts[0], 10);
+                const part2 = parseInt(parts[1], 10);
+                const year = parseInt(parts[2], 10);
+                
+                if (part1 > 12 || part2 <= 12) {
+                    return new Date(year, part2 - 1, part1);
+                } else {
+                    return new Date(year, part1 - 1, part2);
+                }
+            }
+        }
+        
+        // Try ISO format
+        const d = new Date(str);
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    // --- START: CONTENT FROM PART 3 SCRIPT ---
+    // Process CSV files with Web Worker
+    function processCsvFiles(salesFiles, complaintsFile) {
+        showLoading('Inițializare procesare...');
+        
+        Promise.all([
+            ...salesFiles.map(file => readAndParseCSV(file, 'sales')),
+            complaintsFile ? readAndParseCSV(complaintsFile, 'complaints') : Promise.resolve([])
+        ]).then(results => {
+            const complaintsData = complaintsFile ? results[results.length - 1] : [];
+            const allSalesData = results.slice(0, -1).flat();
+            
+            totalTransactions = allSalesData.length;
+            document.getElementById('totalTransactions').textContent = totalTransactions.toLocaleString('ro-RO');
+            
+            const analysisPeriod = document.getElementById('analysisPeriod').value;
+            
+            // Create and run worker
+            const blob = new Blob([fullWorkerCode], { type: 'application/javascript' });
+            const worker = new Worker(URL.createObjectURL(blob));
+            
+            worker.postMessage({
+                salesData: allSalesData,
+                complaintsData: complaintsData,
+                analysisPeriod: analysisPeriod
+            });
+            
+            worker.onmessage = function(e) {
+                if (e.data.type === 'progress') {
+                    updateLoading(e.data.text, e.data.details, e.data.percent);
+                } else if (e.data.type === 'complete') {
+                    customersData = e.data.data;
+                    totalInvoices = e.data.totalInvoices || 0;
+                    hideLoading();
+                    renderTable();
+                    updateStats();
+                    renderCharts();
+                    document.getElementById('statsCards').style.display = 'grid';
+                    worker.terminate();
+                }
+            };
+            
+            worker.onerror = function(error) {
+                console.error('Worker error:', error);
+                hideLoading();
+                alert('Eroare la procesarea datelor: ' + error.message);
+            };
+        }).catch(error => {
+            console.error('Error processing files:', error);
+            hideLoading();
+            alert('Eroare la citirea fișierelor: ' + error.message);
+        });
+    }
+
+    // Read and parse CSV
+    function readAndParseCSV(file, type) {
+        return new Promise((resolve, reject) => {
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    const data = results.data.map(row => {
+                        if (type === 'sales') {
+                            return {
+                                id: row['ID CLIENT'] || row['ID_CLIENT'] || row['Customer ID'] || '',
+                                email: row['EMAIL CLIENT'] || row['EMAIL_CLIENT'] || row['Email'] || 'N/A',
+                                date: row['DATA'] || row['Date'] || '',
+                                value: parseFloat(row['VALOARE FACTURATA'] || row['VALOARE_FACTURATA'] || row['Value'] || 0) || 0,
+                                invoices: parseInt(row['NR FACTURI'] || row['NR_FACTURI'] || row['Invoices'] || 1) || 1,
+                                store: row['MAGAZIN'] || row['Store'] || 'Unknown'
+                            };
+                        } else {
+                            return {
+                                id: row['ID CLIENT'] || row['ID_CLIENT'] || row['Customer ID'] || '',
+                                date: row['DATA RECLAMATIE'] || row['DATA_RECLAMATIE'] || row['Complaint Date'] || '',
+                                quantity: parseFloat(row['Cantitate Reclamata'] || row['Quantity'] || 0) || 0,
+                                value: parseFloat(row['Valoare Articole Reclamate'] || row['Value'] || 0) || 0
+                            };
+                        }
+                    }).filter(row => row.id && row.id !== '' && row.id !== 'null');
+                    resolve(data);
+                },
+                error: function(error) {
+                    reject(error);
+                }
+            });
+        });
+    }
+
+    // Reprocess data
+    function reprocessData() {
+        if (allFiles.length > 0) {
+            const complaintsInput = document.getElementById('complaintsCsvInput');
+            processCsvFiles(allFiles, complaintsInput.files[0] || null);
+        }
+    }
+
+function getFilteredData() {
+        let filtered = [...customersData];
+        
+        // Filter by email
+        const emailFilter = document.getElementById('filterEmail').value;
+        if (emailFilter === 'with') {
+            filtered = filtered.filter(c => c.has_email === true);
+        } else if (emailFilter === 'without') {
+            filtered = filtered.filter(c => c.has_email === false);
+        }
+        
+        // Filter by segment
+        const segmentFilter = document.getElementById('filterSegment').value;
+        if (segmentFilter !== 'all') {
+            filtered = filtered.filter(c => c.segment === segmentFilter);
+        }
+
+        // Filter by complaint checkbox
+        const complaintFilter = document.getElementById('filterHasComplaint').checked;
+        if (complaintFilter) {
+            filtered = filtered.filter(c => c.has_complaint === true);
+        }
+        
+        // Search filter
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        if (search) {
+            filtered = filtered.filter(c => 
+                String(c.id).toLowerCase().includes(search) ||
+                c.email.toLowerCase().includes(search) ||
+                (c.original_segment || c.segment).toLowerCase().includes(search)
+            );
+        }
+        
+        return filtered;
+    }
+// Render table
+    function renderTable() {
+        const data = getFilteredData(); // Obține datele filtrate
+        updateStats(data); // <-- ACTUALIZEAZĂ STATISTICILE cu datele filtrate
+        
+        const totalPages = Math.ceil(data.length / rowsPerPage);
+        const start = (currentPage - 1) * rowsPerPage;
+        const pageData = data.slice(start, start + rowsPerPage);
+        
+        document.getElementById('customersTableBody').innerHTML = pageData.map((c, idx) => {
+            const rowClass = c.no_orders_after_complaint ? 'no-orders-after-complaint' : '';
+            const segmentClass = 'segment-' + c.segment // <-- AFIȘEAZĂ segmentul corect
+                .toLowerCase().replace(/[^a-z]/g, '').replace('champions', 'vip');
+            
+            const emailDisplay = c.has_email ? 
+                (c.email.length > 30 ? c.email.substring(0,30) + '...' : c.email) :
+                '<span class="text-gray-500">N/A</span>';
+            
+            const complaintInfo = c.has_complaint ? 
+                `<span class="text-red-400 cursor-help" title="${c.complaints.length} reclamații">DA (${
+                    c.last_complaint_date ? new Date(c.last_complaint_date).toLocaleDateString('ro-RO') : 'Invalid'
+                })</span>` : 
+                '<span class="text-gray-500">NU</span>';
+            
+            let statusPostComplaint = '<span class="text-gray-500">-</span>';
+            if (c.has_complaint) {
+                statusPostComplaint = c.no_orders_after_complaint ? 
+                    '<span class="text-red-500 font-bold">⚠ PIERDUT</span>' : 
+                    '<span class="text-green-400">✔ ACTIV</span>';
+            }
+            
+            const detailsForTooltip = JSON.stringify({
+                ...c,
+                displaySegment: c.segment // <-- AFIȘEAZĂ segmentul corect și în tooltip
+            }).replace(/"/g, '&quot;');
+
+            return `<tr class="${rowClass}">
+                <td class="px-4 py-2 text-gray-500">${start + idx + 1}</td>
+                <td class="px-4 py-2 font-mono text-blue-400">${c.id}</td>
+                <td class="px-4 py-2 text-xs">${emailDisplay}</td>
+                <td class="px-4 py-2"><span class="segment-badge ${segmentClass}">${c.segment}</span></td>
+                <td class="px-4 py-2 text-right">
+                    <span class="cursor-help font-bold text-green-400" 
+                          data-details='${detailsForTooltip}' 
+                          onmouseover="showScoreTooltip(event)" 
+                          onmouseout="hideScoreTooltip()">
+                          ${c.score}
+                    </span>
+                </td>
+                <td class="px-4 py-2 text-right text-xs">${new Date(c.last_purchase).toLocaleDateString('ro-RO')}</td>
+                <td class="px-4 py-2 text-right">${c.recency}</td>
+                <td class="px-4 py-2 text-right">${c.monetary.toFixed(0)}</td>
+                <td class="px-4 py-2 text-right">${c.invoice_count || c.purchase_cycles}</td>
+                <td class="px-4 py-2 text-right">${c.avg_order_value.toFixed(0)}</td>
+                <td class="px-4 py-2 text-center text-xs">${c.customer_type}</td>
+                <td class="px-4 py-2 text-center">${complaintInfo}</td>
+                <td class="px-4 py-2">${statusPostComplaint}</td>
+            </tr>`;
+        }).join('');
+        
+        renderPagination(totalPages, data.length);
+    }
+
+    // Render pagination
+    function renderPagination(totalPages, totalResults) {
+        const pagination = document.getElementById('pagination');
+        if (totalPages <= 1) {
+            pagination.innerHTML = `<div class="text-sm text-center text-gray-400">Afișare ${totalResults} rezultate</div>`;
+            return;
+        }
+        
+        pagination.innerHTML = `
+            <div class="flex justify-between items-center">
+                <div class="text-sm text-gray-400">Pagina ${currentPage} / ${totalPages} (${totalResults} rezultate)</div>
+                <div class="flex items-center space-x-2">
+                    <button ${currentPage === 1 ? 'disabled' : ''} 
+                            onclick="changePage(${currentPage - 1})" 
+                            class="pagination-btn px-3 py-1 rounded">←</button>
+                    <button ${currentPage === totalPages ? 'disabled' : ''} 
+                            onclick="changePage(${currentPage + 1})" 
+                            class="pagination-btn px-3 py-1 rounded">→</button>
+                </div>
+            </div>`;
+    }
+
+    // Change page
+    function changePage(page) {
+        currentPage = page;
+        renderTable();
+    }
+
+    // Update statistics
+    function updateStats() {
+        const withEmail = customersData.filter(c => c.has_email).length;
+        const withoutEmail = customersData.length - withEmail;
+        
+        document.getElementById('totalCustomers').textContent = customersData.length.toLocaleString('ro-RO');
+        document.getElementById('withEmail').textContent = withEmail.toLocaleString('ro-RO');
+        document.getElementById('withoutEmail').textContent = withoutEmail.toLocaleString('ro-RO');
+        document.getElementById('statTotalCustomers').textContent = customersData.length.toLocaleString('ro-RO');
+        
+        const segments = {
+            'VIP Champions': 0, 'At Risk': 0, 'Lost': 0
+        };
+        let withComplaints = 0, noOrdersAfter = 0, totalValue = 0;
+        
+        customersData.forEach(c => {
+            const seg = c.original_segment || c.segment;
+            if (segments.hasOwnProperty(seg)) segments[seg]++;
+            if (c.has_complaint) withComplaints++;
+            if (c.no_orders_after_complaint) noOrdersAfter++;
+            totalValue += c.avg_order_value;
+        });
+        
+        document.getElementById('statChampions').textContent = segments['VIP Champions'].toLocaleString('ro-RO');
+        document.getElementById('statAtRisk').textContent = segments['At Risk'].toLocaleString('ro-RO');
+        document.getElementById('statLost').textContent = segments['Lost'].toLocaleString('ro-RO');
+        document.getElementById('statComplaints').textContent = withComplaints.toLocaleString('ro-RO');
+        document.getElementById('statNoOrdersAfterComplaint').textContent = noOrdersAfter.toLocaleString('ro-RO');
+        document.getElementById('statAvgValue').textContent = 
+            customersData.length > 0 ? Math.round(totalValue / customersData.length).toLocaleString('ro-RO') : '0';
+        
+        // Calculate seasonality
+        const monthlyOrders = {};
+        customersData.forEach(c => {
+            c.transactions.forEach(t => {
+                const month = new Date(t.date).getMonth();
+                monthlyOrders[month] = (monthlyOrders[month] || 0) + 1;
+            });
+        });
+        
+        const maxMonth = Object.keys(monthlyOrders).reduce((max, m) => 
+            monthlyOrders[m] > monthlyOrders[max] ? m : max, 0);
+        const months = ['Ian','Feb','Mar','Apr','Mai','Iun','Iul','Aug','Sep','Oct','Nov','Dec'];
+        document.getElementById('statSeasonality').textContent = months[maxMonth];
+    }
+
+    // Render charts
+    function renderCharts() {
+        // Segments chart
+        const segmentCounts = {};
+        customersData.forEach(c => {
+            const seg = c.original_segment || c.segment;
+            segmentCounts[seg] = (segmentCounts[seg] || 0) + 1;
+        });
+        
+        const withComplaints = customersData.filter(c => c.has_complaint);
+        const noOrdersAfter = withComplaints.filter(c => c.no_orders_after_complaint).length;
+        
+        // Destroy existing charts
+        if (segmentsChart) segmentsChart.destroy();
+        if (complaintsChart) complaintsChart.destroy();
+        
+        // Create segments chart
+        const ctx1 = document.getElementById('segmentsChart').getContext('2d');
+        segmentsChart = new Chart(ctx1, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(segmentCounts),
+                datasets: [{
+                    data: Object.values(segmentCounts),
+                    backgroundColor: [
+                        '#fbbf24', '#3b82f6', '#8b5cf6', '#10b981', 
+                        '#f97316', '#ef4444', '#6b7280', '#991b1b', '#dc2626'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: '#e5e7eb', font: { size: 11 } }
+                    }
+                }
+            }
+        });
+        
+        // Create complaints chart
+        const ctx2 = document.getElementById('complaintsChart').getContext('2d');
+        complaintsChart = new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: ['Fără Reclamații', 'Activi după Recl.', 'Pierduți după Recl.'],
+                datasets: [{
+                    data: [
+                        customersData.length - withComplaints.length,
+                        withComplaints.length - noOrdersAfter,
+                        noOrdersAfter
+                    ],
+                    backgroundColor: ['#10b981', '#fbbf24', '#ef4444']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { ticks: { color: '#9ca3af' } },
+                    x: { ticks: { color: '#9ca3af' } }
+                }
+            }
+        });
+    }
+
+    // Show score tooltip
+    function showScoreTooltip(event) {
+        const details = JSON.parse(event.target.dataset.details);
+        const tooltip = document.getElementById('scoreTooltip');
+        
+        tooltip.innerHTML = `
+            <div class="text-green-400 font-bold mb-2">Scor Complex: ${details.score}</div>
+            <div class="space-y-1">
+                <div class="flex justify-between">
+                    <span>Recență (30%):</span>
+                    <span class="text-yellow-400">${details.score_components.recency}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Val. Medie (25%):</span>
+                    <span class="text-blue-400">${details.score_components.avgOrder}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Cross-sell (15%):</span>
+                    <span class="text-purple-400">${details.score_components.crossSell}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Vechime (10%):</span>
+                    <span class="text-gray-400">${details.score_components.lifetime}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Tip Produs (10%):</span>
+                    <span class="text-orange-400">${details.score_components.productType}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Trend (5%):</span>
+                    <span class="text-pink-400">${details.score_components.trend}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Cicluri (5%):</span>
+                    <span class="text-indigo-400">${details.score_components.cycles}</span>
+                </div>
+            </div>
+            <div class="mt-2 pt-2 border-t border-gray-700">
+                <div class="text-xs text-gray-400">
+                    RFM: R=${details.rfm_score.r} F=${details.rfm_score.f} M=${details.rfm_score.m}
+                </div>
+                <div class="text-xs text-gray-400">
+                    Segment: ${details.displaySegment}
+                </div>
+            </div>`;
+        
+        tooltip.style.display = 'block';
+        tooltip.style.left = event.pageX + 10 + 'px';
+        tooltip.style.top = event.pageY + 10 + 'px';
+    }
+
+    // Hide score tooltip
+    function hideScoreTooltip() {
+        document.getElementById('scoreTooltip').style.display = 'none';
+    }
+
+    // Export results
+    function exportResults() {
+        const data = getFilteredData();
+        if (data.length === 0) {
+            alert('Nu există date pentru export!');
+            return;
+        }
+        
+        const csv = Papa.unparse(data.map(c => ({
+            'ID Client': c.id,
+            'Email': c.email,
+            'Are Email': c.has_email ? 'DA' : 'NU',
+            'Segment': c.original_segment || c.segment,
+            'Scor': c.score,
+            'Ultima Achiziție': new Date(c.last_purchase).toLocaleDateString('ro-RO'),
+            'Zile Inactiv': c.recency,
+            'Valoare Totală': c.monetary.toFixed(2),
+            'Nr. Facturi': c.invoice_count || c.purchase_cycles,
+            'Valoare Medie': c.avg_order_value.toFixed(2),
+            'Tip Client': c.customer_type,
+            'Are Reclamație': c.has_complaint ? 'DA' : 'NU',
+            'Pierdut după Reclamație': c.no_orders_after_complaint ? 'DA' : 'NU'
+        })));
+        
+        const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `mobexpert_crm_export_${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+    }
+
+    // Loading functions
+    function showLoading(text) {
+        document.getElementById('loadingOverlay').style.display = 'flex';
+        document.getElementById('loadingText').textContent = text;
+    }
+
+    function updateLoading(text, details, percent) {
+        document.getElementById('loadingText').textContent = text;
+        document.getElementById('loadingDetails').textContent = details;
+        document.getElementById('loadingProgress').style.width = percent + '%';
+    }
+
+    function hideLoading() {
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+</script>
+</body>
+</html>
