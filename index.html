@@ -72,6 +72,13 @@
   </div>
 
   <div id="scoreTooltip" class="score-tooltip"></div>
+  <div id="storyOverlay" class="fixed inset-0 bg-black/80 backdrop-blur-sm items-center justify-center z-[999]" style="display: none;">
+    <div id="storyModal" class="bg-[#1a1a1a] border border-green-500/20 rounded-xl shadow-2xl p-6 max-w-2xl w-full mx-4 relative">
+      <button onclick="hideStoryModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white transition">&times;</button>
+      <h2 class="text-lg font-bold text-green-400 mb-4 mono">Analiză Client</h2>
+      <div id="storyContent" class="text-sm text-gray-300 leading-relaxed space-y-3"></div>
+    </div>
+  </div>
 
   <div id="passwordOverlay" class="fixed inset-0 bg-black flex items-center justify-center z-50">
     <canvas id="matrixCanvas"></canvas>
@@ -202,6 +209,7 @@
                   <th class="px-4 py-3 text-right">Val. Medie</th>
                   <th class="px-4 py-3 text-center">Reclamație</th>
                   <th class="px-4 py-3 text-left">Status Post-Recl</th>
+                  <th class="px-4 py-3 text-center">Analiză</th>
                 </tr>
               </thead>
               <tbody id="customersTableBody" class="text-sm text-gray-300"></tbody>
@@ -1104,12 +1112,7 @@ function getFilteredData() {
                 <td class="px-4 py-2 text-xs">${emailDisplay}</td>
                 <td class="px-4 py-2"><span class="segment-badge ${segmentClass}">${c.segment}</span></td>
                 <td class="px-4 py-2 text-right">
-                    <span class="cursor-help font-bold text-green-400" 
-                          data-details='${detailsForTooltip}' 
-                          onmouseover="showScoreTooltip(event)" 
-                          onmouseout="hideScoreTooltip()">
-                          ${c.score}
-                    </span>
+                    <span class="cursor-help font-bold text-green-400" data-details='${detailsForTooltip}' onmouseover="showScoreTooltip(event)" onmouseout="hideScoreTooltip()">${c.score}</span>
                 </td>
                 <td class="px-4 py-2 text-right font-mono">${Math.round(c.score_components.trend)}</td>
                 <td class="px-4 py-2 text-right text-xs">${new Date(c.first_purchase).toLocaleDateString('ro-RO')}</td>
@@ -1120,6 +1123,9 @@ function getFilteredData() {
                 <td class="px-4 py-2 text-right">${c.avg_order_value.toFixed(0)}</td>
                 <td class="px-4 py-2 text-center">${complaintInfo}</td>
                 <td class="px-4 py-2">${statusPostComplaint}</td>
+                <td class="px-4 py-2 text-center">
+                  <button onclick="generateClientStory('${c.id}')" class="pagination-btn px-2 py-1 text-xs rounded">Analiză</button>
+                </td>
             </tr>`;
         }).join('');
         
@@ -1372,6 +1378,61 @@ function getFilteredData() {
 
     function hideLoading() {
         document.getElementById('loadingOverlay').style.display = 'none';
+    }
+  // --- FUNCȚII PENTRU POVESTEA CLIENTULUI ---
+
+    function showStoryModal(storyHtml) {
+        document.getElementById('storyContent').innerHTML = storyHtml;
+        document.getElementById('storyOverlay').style.display = 'flex';
+    }
+
+    function hideStoryModal() {
+        document.getElementById('storyOverlay').style.display = 'none';
+    }
+
+    function generateClientStory(customerId) {
+        const c = customersData.find(cust => cust.id == customerId);
+        if (!c) return;
+
+        let story = [];
+        const lifetimeYears = (c.customer_lifetime / 365).toFixed(1);
+        const recencyMonths = (c.recency / 30).toFixed(1);
+        const trend = Math.round(c.score_components.trend);
+
+        // Paragraf 1: Introducere și Status
+        let intro = `Clientul <strong>${c.id}</strong> este clasificat ca <strong>${c.segment}</strong>, cu un scor de valoare de <strong>${c.score}</strong>. Este un client cu o vechime de aproximativ <strong>${lifetimeYears} ani</strong> și o valoare totală a comenzilor de <strong>${c.monetary.toFixed(0)} RON</strong>.`;
+        if (c.recency > 30) {
+            intro += ` În prezent, este inactiv de circa <strong>${recencyMonths} luni</strong>.`;
+        } else {
+            intro += ` Ultima sa achiziție a fost <strong>recentă</strong>.`;
+        }
+        story.push(intro);
+
+        // Paragraf 2: Comportament de Cumpărare și Trend
+        let behavior = `Comportamentul său de cumpărare indică un client de tip <strong>${c.customer_type}</strong>, cu o valoare medie a comenzii de <strong>${c.avg_order_value.toFixed(0)} RON</strong>.`;
+        if (trend > 70) {
+            behavior += ` Traiectoria sa în perioada activă a fost <strong>excelentă</strong> (Trend: ${trend}), indicând o creștere semnificativă a valorii și frecvenței.`;
+        } else if (trend > 50) {
+            behavior += ` Evoluția sa a fost una <strong>pozitivă și constantă</strong> (Trend: ${trend}).`;
+        } else if (trend < 40) {
+            behavior += ` Comportamentul său a arătat semne de <strong>declin</strong> în timp (Trend: ${trend}).`;
+        } else {
+            behavior += ` A avut un comportament de cumpărare <strong>stabil</strong> (Trend: ${trend}).`;
+        }
+        story.push(behavior);
+
+        // Paragraf 3: Reclamații (dacă există)
+        if (c.has_complaint) {
+            let conclusion = `Clientul a înregistrat <strong>${c.complaints.length}</strong> reclamație(i). `;
+            if (c.no_orders_after_complaint) {
+                conclusion += `De la ultima reclamație, nu a mai efectuat nicio achiziție, fiind considerat un client <strong>pierdut post-reclamație</strong>.`;
+            } else {
+                conclusion += `Chiar și după reclamații, clientul a rămas <strong>activ</strong>.`;
+            }
+            story.push(conclusion);
+        }
+
+        showStoryModal(story.map(p => `<p>${p}</p>`).join(''));
     }
 </script>
 </body>
