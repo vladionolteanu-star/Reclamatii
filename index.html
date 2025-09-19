@@ -525,71 +525,77 @@
 <body class="bg-black text-gray-100">
   <div id="loadingOverlay" class="loading-overlay">
     <div class="text-center">
-      <div class="mobexpert-brand text-3xl mb-4">MOBEXPERT CRM</div>
+      <div class="mobexpert-brand text-4xl mb-4">MOBEXPERT CRM</div>
       <div class="text-green-400 mono text-sm mb-4" id="loadingText">Procesare date...</div>
-      <div class="w-80 bg-gray-900 rounded-full h-2 overflow-hidden border border-green-500/20">
-        <div id="loadingProgress" class="h-2 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-300" style="width: 0%"></div>
+      <div class="w-80 bg-gradient-to-r from-gray-900 to-gray-800 rounded-full h-3 overflow-hidden border border-green-500/20">
+        <div id="loadingProgress" class="h-3 bg-gradient-to-r from-green-600 to-green-400 rounded-full transition-all duration-500 shadow-lg shadow-green-500/50" style="width: 0%"></div>
       </div>
-      <div class="mt-4 text-gray-500 text-xs mono" id="loadingDetails"></div>
+      <div class="mt-4 text-gray-500 text-xs mono opacity-60" id="loadingDetails"></div>
     </div>
   </div>
 
   <div id="scoreTooltip" class="score-tooltip"></div>
-  <div id="storyOverlay" class="fixed inset-0 bg-black/80 backdrop-blur-sm items-center justify-center z-[999]" style="display: none;">
-    <div id="storyModal" class="bg-[#1a1a1a] border border-green-500/20 rounded-xl shadow-2xl p-6 max-w-2xl w-full mx-4 relative">
-      <button onclick="hideStoryModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white transition">&times;</button>
-      <h2 class="text-lg font-bold text-green-400 mb-4 mono">Analiză Client</h2>
-      <div id="storyContent" class="text-sm text-gray-300 leading-relaxed space-y-3"></div>
+  
+  <div id="storyOverlay" class="fixed inset-0 bg-black/90 backdrop-blur-md items-center justify-center z-[999]" style="display: none;">
+    <div id="storyModal" class="bg-gradient-to-br from-gray-900 to-black border border-green-500/20 rounded-2xl shadow-2xl p-8 max-w-2xl w-full mx-4 relative">
+      <button onclick="hideStoryModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/30 hover:text-white transition-all flex items-center justify-center">&times;</button>
+      <h2 class="text-xl font-bold text-green-400 mb-6 mono tracking-wide">Analiză Client</h2>
+      <div id="storyContent" class="text-sm text-gray-300 leading-relaxed space-y-4"></div>
     </div>
   </div>
 
   <div id="passwordOverlay" class="fixed inset-0 bg-black flex items-center justify-center z-50">
     <canvas id="matrixCanvas"></canvas>
-    <div class="login-content p-10 rounded-2xl shadow-2xl max-w-md w-full mx-4">
-      <div class="text-center mb-8">
-        <h1 class="mobexpert-brand mb-2">MOBEXPERT CRM</h1>
+    <div class="login-content p-12 rounded-3xl shadow-2xl max-w-md w-full mx-4">
+      <div class="text-center mb-10">
+        <h1 class="mobexpert-brand mb-3 text-4xl">MOBEXPERT CRM</h1>
         <h2 class="text-2xl font-bold text-green-400 mono tracking-wider">HOME & DECO INTELLIGENCE</h2>
-        <p class="text-green-500/40 text-xs mono mt-2">SECURE ACCESS REQUIRED</p>
+        <p class="text-green-500/40 text-xs mono mt-3 tracking-widest">SECURE ACCESS REQUIRED</p>
       </div>
       <div class="space-y-6">
-        <input type="password" id="passwordInput" class="w-full p-4 rounded-lg mono text-sm input-dark" placeholder="Enter access code" autocomplete="off">
-        <button onclick="checkPassword()" class="w-full btn-cyber py-4 rounded-lg mono text-sm tracking-wider">AUTHENTICATE</button>
+        <input type="password" id="passwordInput" class="w-full p-5 rounded-xl mono text-sm input-dark" placeholder="Enter access code" autocomplete="off">
+        <button onclick="checkPassword()" class="w-full btn-cyber py-5 rounded-xl mono text-sm tracking-wider font-bold">AUTHENTICATE</button>
       </div>
     </div>
   </div>
 
   <div class="hidden" id="mainContent">
     <div class="dashboard-gradient min-h-screen">
-      <div class="p-4 bg-black/30 backdrop-blur-md border-b border-gray-800 sticky top-0 z-10">
-        <div class="flex items-center justify-between mb-4">
-          <div class="flex items-center space-x-4">
-            <h1 class="mobexpert-brand">MOBEXPERT CRM</h1>
-            <span class="text-gray-500 text-xs mono">v5.0 HOME & DECO</span>
+      <div class="p-6 bg-gradient-to-b from-black/50 to-black/30 backdrop-blur-xl border-b border-gray-800/50 sticky top-0 z-10">
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center space-x-6">
+            <h1 class="mobexpert-brand text-3xl">MOBEXPERT CRM</h1>
+            <span class="px-3 py-1 bg-green-500/10 text-green-400 text-xs mono rounded-full border border-green-500/20">v5.0 HOME & DECO</span>
           </div>
-          <div class="flex items-center space-x-4">
-            <button onclick="exportResults()" class="btn-cyber px-4 py-2 rounded-lg text-sm">Export CSV</button>
-            <div class="text-xs text-gray-400 mono">
-              <span id="totalCustomers">0</span> clienți | 
-              <span id="totalTransactions">0</span> tranzacții | 
-              <span class="filter-badge email-yes">Cu email: <span id="withEmail">0</span></span>
-              <span class="filter-badge email-no">Fără email: <span id="withoutEmail">0</span></span>
+          <div class="flex items-center space-x-6">
+            <button onclick="exportResults()" class="btn-cyber px-6 py-3 rounded-xl text-sm font-semibold tracking-wide">Export CSV</button>
+            <div class="text-xs text-gray-400 mono space-x-3">
+              <span class="text-gray-500">Total:</span>
+              <span class="text-white font-bold" id="totalCustomers">0</span> clienți
+              <span class="text-gray-600">|</span>
+              <span class="text-white font-bold" id="totalTransactions">0</span> tranzacții
+              <span class="text-gray-600">|</span>
+              <span class="filter-badge email-yes">✓ Email: <span id="withEmail">0</span></span>
+              <span class="filter-badge email-no">✗ Email: <span id="withoutEmail">0</span></span>
             </div>
           </div>
         </div>
 
         <div class="grid grid-cols-7 gap-4">
           <div>
-            <label class="block text-xs text-gray-400 mb-1 mono">DATE VÂNZĂRI (CSV)</label>
-            <input type="file" id="salesCsvInput" multiple accept=".csv" class="w-full text-xs text-gray-400 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-500 file:transition-all">
-            <div id="filesList" class="mt-2 max-h-32 overflow-y-auto"></div>
+            <label class="block text-xs text-gray-500 mb-2 mono uppercase tracking-wider">Date Vânzări</label>
+            <input type="file" id="salesCsvInput" multiple accept=".csv" class="w-full text-xs text-gray-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-gradient-to-r file:from-blue-600 file:to-blue-500 file:text-white hover:file:from-blue-700 hover:file:to-blue-600 file:transition-all file:shadow-md cursor-pointer">
+            <div id="filesList" class="mt-3 max-h-32 overflow-y-auto space-y-2"></div>
           </div>
+          
           <div>
-            <label class="block text-xs text-gray-400 mb-1 mono">RECLAMAȚII (CSV)</label>
-            <input type="file" id="complaintsCsvInput" accept=".csv" class="w-full text-xs text-gray-400 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-red-600 file:text-white hover:file:bg-red-500 file:transition-all">
+            <label class="block text-xs text-gray-500 mb-2 mono uppercase tracking-wider">Reclamații</label>
+            <input type="file" id="complaintsCsvInput" accept=".csv" class="w-full text-xs text-gray-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-gradient-to-r file:from-red-600 file:to-red-500 file:text-white hover:file:from-red-700 hover:file:to-red-600 file:transition-all file:shadow-md cursor-pointer">
           </div>
+          
           <div>
-            <label class="block text-xs text-gray-400 mb-1 mono">PERIOADA ANALIZĂ</label>
-            <select id="analysisPeriod" class="w-full p-1.5 input-dark rounded text-xs">
+            <label class="block text-xs text-gray-500 mb-2 mono uppercase tracking-wider">Perioadă</label>
+            <select id="analysisPeriod" class="w-full p-2.5 input-dark rounded-lg text-xs">
               <option value="all">Toată perioada</option>
               <option value="6">Ultimii 6 ani</option>
               <option value="5">Ultimii 5 ani</option>
@@ -599,17 +605,19 @@
               <option value="1">Ultimul an</option>
             </select>
           </div>
+          
           <div>
-            <label class="block text-xs text-gray-400 mb-1 mono">EMAIL</label>
-            <select id="filterEmail" class="w-full p-1.5 input-dark rounded text-xs">
+            <label class="block text-xs text-gray-500 mb-2 mono uppercase tracking-wider">Email</label>
+            <select id="filterEmail" class="w-full p-2.5 input-dark rounded-lg text-xs">
               <option value="all">Toți</option>
               <option value="with">Cu email</option>
               <option value="without">Fără email</option>
             </select>
           </div>
+          
           <div>
-            <label class="block text-xs text-gray-400 mb-1 mono">SEGMENT</label>
-            <select id="filterSegment" class="w-full p-1.5 input-dark rounded text-xs">
+            <label class="block text-xs text-gray-500 mb-2 mono uppercase tracking-wider">Segment</label>
+            <select id="filterSegment" class="w-full p-2.5 input-dark rounded-lg text-xs">
               <option value="all">Toate segmentele</option>
               <option value="VIP Champions">VIP Champions</option>
               <option value="Loyal Customers">Loyal Customers</option>
@@ -624,138 +632,211 @@
           </div>
 
           <div>
-            <label class="block text-xs text-gray-400 mb-1 mono invisible">Bifa</label> <div class="flex items-center h-full">
-              <label for="filterHasComplaint" class="flex items-center space-x-2 text-xs text-gray-400 mono cursor-pointer hover:text-white transition">
+            <label class="block text-xs text-gray-500 mb-2 mono uppercase tracking-wider">Filtre</label>
+            <div class="p-2.5 input-dark rounded-lg flex items-center justify-center h-[34px]">
+              <label for="filterHasComplaint" class="flex items-center space-x-2 cursor-pointer group">
                 <input type="checkbox" id="filterHasComplaint" class="w-4 h-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-600 cursor-pointer">
-                <span>CU RECLAMAȚII</span>
+                <span class="text-xs text-gray-400 group-hover:text-white transition-colors">CU RECLAMAȚII</span>
               </label>
             </div>
           </div>
+          
           <div>
-            <label class="block text-xs text-gray-400 mb-1 mono">CĂUTARE</label>
-            <input type="text" id="searchInput" placeholder="ID Client / Email / Segment..." class="w-full p-1.5 input-dark rounded text-xs">
+            <label class="block text-xs text-gray-500 mb-2 mono uppercase tracking-wider">Căutare</label>
+            <input type="text" id="searchInput" placeholder="ID / Email / Segment..." class="w-full p-2.5 input-dark rounded-lg text-xs">
           </div>
         </div>
       </div>
 
-      <div class="p-6">
-        <div id="statsCards" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-8 gap-4 mb-6" style="display: none;">
-          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">Total Clienți</p><p id="statTotalCustomers" class="text-2xl font-bold">0</p></div>
-          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">VIP Champions</p><p id="statChampions" class="text-2xl font-bold text-yellow-400">0</p></div>
-          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">At Risk</p><p id="statAtRisk" class="text-2xl font-bold text-orange-400">0</p></div>
-          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">Lost</p><p id="statLost" class="text-2xl font-bold text-red-400">0</p></div>
-          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">Cu Reclamații</p><p id="statComplaints" class="text-2xl font-bold text-purple-400">0</p></div>
-          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">Pierdut după Recl.</p><p id="statNoOrdersAfterComplaint" class="text-2xl font-bold text-red-500">0</p></div>
-          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">Val. Medie Cmd</p><p id="statAvgValue" class="text-2xl font-bold text-green-400">0</p></div>
-          <div class="card-dark p-4 rounded-xl"><p class="text-xs text-gray-400">Sezonalitate</p><p id="statSeasonality" class="text-xl font-bold text-blue-400">-</p></div>
+      <div class="p-8">
+        <div id="statsCards" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-8" style="display: none;">
+          <div class="card-dark p-5 rounded-xl hover:scale-105 transition-transform cursor-pointer">
+            <p class="text-xs text-gray-500 uppercase tracking-wide mb-2">Total Clienți</p>
+            <p id="statTotalCustomers" class="text-3xl font-bold text-white">0</p>
+          </div>
+          <div class="card-dark p-5 rounded-xl hover:scale-105 transition-transform cursor-pointer">
+            <p class="text-xs text-gray-500 uppercase tracking-wide mb-2">VIP Champions</p>
+            <p id="statChampions" class="text-3xl font-bold text-yellow-400">0</p>
+          </div>
+          <div class="card-dark p-5 rounded-xl hover:scale-105 transition-transform cursor-pointer">
+            <p class="text-xs text-gray-500 uppercase tracking-wide mb-2">At Risk</p>
+            <p id="statAtRisk" class="text-3xl font-bold text-orange-400">0</p>
+          </div>
+          <div class="card-dark p-5 rounded-xl hover:scale-105 transition-transform cursor-pointer">
+            <p class="text-xs text-gray-500 uppercase tracking-wide mb-2">Lost</p>
+            <p id="statLost" class="text-3xl font-bold text-red-400">0</p>
+          </div>
+          <div class="card-dark p-5 rounded-xl hover:scale-105 transition-transform cursor-pointer">
+            <p class="text-xs text-gray-500 uppercase tracking-wide mb-2">Cu Reclamații</p>
+            <p id="statComplaints" class="text-3xl font-bold text-purple-400">0</p>
+          </div>
+          <div class="card-dark p-5 rounded-xl hover:scale-105 transition-transform cursor-pointer">
+            <p class="text-xs text-gray-500 uppercase tracking-wide mb-2">Pierdut după</p>
+            <p id="statNoOrdersAfterComplaint" class="text-3xl font-bold text-red-500">0</p>
+          </div>
+          <div class="card-dark p-5 rounded-xl hover:scale-105 transition-transform cursor-pointer">
+            <p class="text-xs text-gray-500 uppercase tracking-wide mb-2">Val. Medie</p>
+            <p id="statAvgValue" class="text-3xl font-bold text-green-400">0</p>
+          </div>
+          <div class="card-dark p-5 rounded-xl hover:scale-105 transition-transform cursor-pointer">
+            <p class="text-xs text-gray-500 uppercase tracking-wide mb-2">Sezonalitate</p>
+            <p id="statSeasonality" class="text-2xl font-bold text-blue-400">-</p>
+          </div>
         </div>
 
-        <div class="card-dark rounded-xl">
-          <div class="p-4 border-b border-gray-800">
-            <h3 class="text-lg font-semibold">Analiză Detaliată Clienți - Home & Deco</h3>
+        <div class="card-dark rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-gray-800/50 bg-gradient-to-r from-transparent via-green-500/5 to-transparent">
+            <h3 class="text-xl font-bold text-white">Analiză Detaliată Clienți - Home & Deco</h3>
           </div>
-<div class="overflow-x-auto table-container-sticky">
+          
+          <div class="overflow-x-auto table-container-sticky">
             <table class="table w-full text-sm table-dark">
               <thead>
                 <tr class="text-xs mono uppercase tracking-wider text-gray-400">
-                  <th class="px-4 py-3 text-left">#</th>
-                  <th class="px-4 py-3 text-left">ID Client</th>
-                  <th class="px-4 py-3 text-left">Email</th>
-                  <th class="px-4 py-3 text-left">Segment</th>
-                  <th class="px-4 py-3 text-right cursor-help" title="Click pentru detalii">Scor</th>
-                  <th class="px-4 py-3 text-right">Trend</th>
-                  <th class="px-4 py-3 text-right">Prima Achiziție</th>
-                  <th class="px-4 py-3 text-right">Ultima Achiziție</th>
-                  <th class="px-4 py-3 text-right">Zile Inactiv</th>
-                  <th class="px-4 py-3 text-right">Valoare Totală</th>
-                  <th class="px-4 py-3 text-right">Nr. Facturi</th>
-                  <th class="px-4 py-3 text-right">Val. Medie</th>
-                  <th class="px-4 py-3 text-center">Reclamație</th>
-                  <th class="px-4 py-3 text-left">Status Post-Recl</th>
-                  <th class="px-4 py-3 text-center">Analiză</th>
+                  <th class="px-4 py-4 text-left">#</th>
+                  <th class="px-4 py-4 text-left">ID Client</th>
+                  <th class="px-4 py-4 text-left">Email</th>
+                  <th class="px-4 py-4 text-left">Segment</th>
+                  <th class="px-4 py-4 text-right cursor-help" title="Click pentru detalii">Scor</th>
+                  <th class="px-4 py-4 text-right">Trend</th>
+                  <th class="px-4 py-4 text-right">Prima Achiziție</th>
+                  <th class="px-4 py-4 text-right">Ultima Achiziție</th>
+                  <th class="px-4 py-4 text-right">Zile Inactiv</th>
+                  <th class="px-4 py-4 text-right">Valoare Totală</th>
+                  <th class="px-4 py-4 text-right">Nr. Facturi</th>
+                  <th class="px-4 py-4 text-right">Val. Medie</th>
+                  <th class="px-4 py-4 text-center">Reclamație</th>
+                  <th class="px-4 py-4 text-left">Status Post-Recl</th>
+                  <th class="px-4 py-4 text-center">Analiză</th>
                 </tr>
               </thead>
               <tbody id="customersTableBody" class="text-sm text-gray-300"></tbody>
             </table>
           </div>
-          <div id="pagination" class="p-4 border-t border-gray-800"></div>
+          
+          <div id="pagination" class="p-5 border-t border-gray-800/50 bg-gradient-to-r from-transparent via-gray-800/20 to-transparent"></div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-            <div class="card-dark rounded-xl">
-                <div class="p-4 border-b border-gray-800">
+        <!-- Restul continuă neschimbat de la charts în jos -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+            <div class="card-dark rounded-2xl overflow-hidden">
+                <div class="p-5 border-b border-gray-800/50 bg-gradient-to-r from-transparent via-green-500/5 to-transparent">
                     <h2 class="text-lg font-bold text-white">Distribuție Segmente Home & Deco</h2>
                 </div>
-                <div class="p-6">
+                <div class="p-8 bg-gradient-to-br from-gray-900/50 to-black/50">
                     <canvas id="segmentsChart" style="max-height: 300px;"></canvas>
                 </div>
             </div>
-            <div class="card-dark rounded-xl">
-                <div class="p-4 border-b border-gray-800">
+            
+            <div class="card-dark rounded-2xl overflow-hidden">
+                <div class="p-5 border-b border-gray-800/50 bg-gradient-to-r from-transparent via-red-500/5 to-transparent">
                     <h2 class="text-lg font-bold text-white">Impact Reclamații & Trend</h2>
                 </div>
-                <div class="p-6">
+                <div class="p-8 bg-gradient-to-br from-gray-900/50 to-black/50">
                     <canvas id="complaintsChart" style="max-height: 300px;"></canvas>
                 </div>
             </div>
         </div>
 
-        <div class="card-dark rounded-xl mt-6">
-            <div class="p-4 border-b border-gray-800">
-                <h2 class="text-lg font-bold text-white">📊 Metodologie Adaptată Mobexpert</h2>
+        <div class="card-dark rounded-2xl mt-8 overflow-hidden">
+            <div class="p-5 border-b border-gray-800/50 bg-gradient-to-r from-transparent via-blue-500/5 to-transparent">
+                <h2 class="text-xl font-bold text-white flex items-center space-x-3">
+                    <span class="text-2xl">📊</span>
+                    <span>Metodologie Adaptată Mobexpert</span>
+                </h2>
             </div>
-            <div class="p-6 space-y-4 text-sm">
-                <div class="bg-black/30 p-4 rounded-lg">
-                    <h3 class="text-green-400 font-bold mb-2">Segmentare RFM pentru Home & Deco</h3>
+            <div class="p-8 space-y-6 text-sm">
+                <div class="bg-gradient-to-br from-black/60 to-gray-900/30 p-6 rounded-xl border border-green-500/10">
+                    <h3 class="text-green-400 font-bold mb-4 text-base">Segmentare RFM pentru Home & Deco</h3>
                     <div class="grid grid-cols-3 gap-4 text-xs">
-                        <div class="bg-gray-900/50 p-3 rounded">
-                            <strong class="text-yellow-400">Recency (R)</strong><br>
-                            • 0-6 luni: R=5<br>
-                            • 6-12 luni: R=4<br>
-                            • 1-2 ani: R=3<br>
-                            • 2-4 ani: R=2<br>
-                            • >4 ani: R=1
+                        <div class="bg-gradient-to-br from-yellow-900/20 to-black/50 p-4 rounded-lg border border-yellow-500/20">
+                            <strong class="text-yellow-400 text-sm block mb-2">Recency (R)</strong>
+                            <div class="space-y-1 text-gray-400">
+                                <div>• 0-6 luni: <span class="text-yellow-300 font-bold">R=5</span></div>
+                                <div>• 6-12 luni: <span class="text-yellow-300 font-bold">R=4</span></div>
+                                <div>• 1-2 ani: <span class="text-yellow-300 font-bold">R=3</span></div>
+                                <div>• 2-4 ani: <span class="text-yellow-300 font-bold">R=2</span></div>
+                                <div>• >4 ani: <span class="text-yellow-300 font-bold">R=1</span></div>
+                            </div>
                         </div>
-                        <div class="bg-gray-900/50 p-3 rounded">
-                            <strong class="text-blue-400">Frequency (F) - Nr. Facturi</strong><br>
-                            • 1 factură: F=1<br>
-                            • 2-3 facturi: F=2<br>
-                            • 4-6 facturi: F=3<br>
-                            • 7-12 facturi: F=4<br>
-                            • 13+ facturi: F=5
+                        <div class="bg-gradient-to-br from-blue-900/20 to-black/50 p-4 rounded-lg border border-blue-500/20">
+                            <strong class="text-blue-400 text-sm block mb-2">Frequency (F)</strong>
+                            <div class="space-y-1 text-gray-400">
+                                <div>• 1 factură: <span class="text-blue-300 font-bold">F=1</span></div>
+                                <div>• 2-3 facturi: <span class="text-blue-300 font-bold">F=2</span></div>
+                                <div>• 4-6 facturi: <span class="text-blue-300 font-bold">F=3</span></div>
+                                <div>• 7-12 facturi: <span class="text-blue-300 font-bold">F=4</span></div>
+                                <div>• 13+ facturi: <span class="text-blue-300 font-bold">F=5</span></div>
+                            </div>
                         </div>
-                        <div class="bg-gray-900/50 p-3 rounded">
-                            <strong class="text-purple-400">Monetary (M) - Val. Medie</strong><br>
-                            • <500 RON: M=1<br>
-                            • 500-2000 RON: M=2<br>
-                            • 2000-5000 RON: M=3<br>
-                            • 5000-10000 RON: M=4<br>
-                            • >10000 RON: M=5
+                        <div class="bg-gradient-to-br from-purple-900/20 to-black/50 p-4 rounded-lg border border-purple-500/20">
+                            <strong class="text-purple-400 text-sm block mb-2">Monetary (M)</strong>
+                            <div class="space-y-1 text-gray-400">
+                                <div>• <500 RON: <span class="text-purple-300 font-bold">M=1</span></div>
+                                <div>• 500-2K RON: <span class="text-purple-300 font-bold">M=2</span></div>
+                                <div>• 2K-5K RON: <span class="text-purple-300 font-bold">M=3</span></div>
+                                <div>• 5K-10K RON: <span class="text-purple-300 font-bold">M=4</span></div>
+                                <div>• >10K RON: <span class="text-purple-300 font-bold">M=5</span></div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="bg-black/30 p-4 rounded-lg">
-                    <h3 class="text-green-400 font-bold mb-2">Scor Complex Adaptat (0-100)</h3>
-                    <ul class="text-xs space-y-1 text-gray-400">
-                        <li>• <strong>Recența (30%)</strong>: Focus pe clienții recenți (normalizat pe 2 ani)</li>
-                        <li>• <strong>Val. Medie/Comandă (25%)</strong>: Identifică clienții cu comenzi mari</li>
-                        <li>• <strong>Cross-sell (15%)</strong>: Câte categorii de produse a cumpărat</li>
-                        <li>• <strong>Vechime (10%)</strong>: Loialitate pe termen lung</li>
-                        <li>• <strong>Tip Produs (10%)</strong>: Mobilier principal vs decorațiuni</li>
-                        <li>• <strong>Trend (5%)</strong>: Evoluție frecvență și valoare</li>
-                        <li>• <strong>Frecvență Facturi (5%)</strong>: Număr total de facturi emise</li>
-                    </ul>
+                <div class="bg-gradient-to-br from-black/60 to-gray-900/30 p-6 rounded-xl border border-blue-500/10">
+                    <h3 class="text-green-400 font-bold mb-4 text-base">Scor Complex Adaptat (0-100)</h3>
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div class="flex justify-between items-center p-2 bg-black/30 rounded-lg">
+                            <span class="text-gray-400">Recența</span>
+                            <span class="text-green-400 font-bold">30%</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-black/30 rounded-lg">
+                            <span class="text-gray-400">Val. Medie/Cmd</span>
+                            <span class="text-blue-400 font-bold">25%</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-black/30 rounded-lg">
+                            <span class="text-gray-400">Cross-sell</span>
+                            <span class="text-purple-400 font-bold">15%</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-black/30 rounded-lg">
+                            <span class="text-gray-400">Vechime</span>
+                            <span class="text-yellow-400 font-bold">10%</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-black/30 rounded-lg">
+                            <span class="text-gray-400">Tip Produs</span>
+                            <span class="text-orange-400 font-bold">10%</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-black/30 rounded-lg">
+                            <span class="text-gray-400">Trend</span>
+                            <span class="text-pink-400 font-bold">5%</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-black/30 rounded-lg">
+                            <span class="text-gray-400">Frecv. Facturi</span>
+                            <span class="text-indigo-400 font-bold">5%</span>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="bg-gradient-to-r from-green-900/20 to-blue-900/20 p-4 rounded-lg border border-green-500/30">
-                    <p class="text-xs text-gray-300">
-                        <strong class="text-green-400">📌 Praguri Valoare Mobexpert:</strong><br>
-                        • Achiziție mică (decorațiuni): <500 RON<br>
-                        • Achiziție medie (mobilier mic): 500-2500 RON<br>
-                        • Achiziție mare (mobilier principal): >6000 RON<br>
-                        • Client pierdut: fără comenzi >2 ani<br>
-                        • Complaint Risk: fără comenzi în 18 luni după reclamație
+                <div class="bg-gradient-to-r from-green-900/30 via-blue-900/20 to-purple-900/30 p-6 rounded-xl border border-green-500/30">
+                    <p class="text-sm text-gray-300 leading-relaxed">
+                        <strong class="text-green-400 text-base block mb-3">📌 Praguri Valoare Mobexpert</strong>
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+                                <span class="text-gray-400">Decorațiuni: <strong class="text-white">&lt;500 RON</strong></span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="w-2 h-2 bg-yellow-400 rounded-full"></span>
+                                <span class="text-gray-400">Mobilier mic: <strong class="text-white">500-2500 RON</strong></span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="w-2 h-2 bg-blue-400 rounded-full"></span>
+                                <span class="text-gray-400">Mobilier principal: <strong class="text-white">&gt;6000 RON</strong></span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="w-2 h-2 bg-red-400 rounded-full"></span>
+                                <span class="text-gray-400">Client pierdut: <strong class="text-white">&gt;2 ani</strong></span>
+                            </div>
+                        </div>
                     </p>
                 </div>
             </div>
