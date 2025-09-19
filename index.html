@@ -1397,6 +1397,13 @@ function getFilteredData() {
         const c = customersData.find(cust => cust.id == customerId);
         if (!c) return;
 
+        // --- CALCULE REVIZUITE PENTRU O POVESTE MAI CORECTĂ ---
+        const now = new Date();
+        const firstPurchaseDate = new Date(c.first_purchase);
+        const totalLifetimeDays = Math.floor((now - firstPurchaseDate) / (1000 * 60 * 60 * 24));
+        const totalLifetimeYears = (totalLifetimeDays / 365).toFixed(1); // Aceasta este vechimea reală
+        
+        const recencyMonths = (c.recency / 30).toFixed(1);
         const trend = Math.round(c.score_components.trend);
         let storyHtml = '';
 
@@ -1410,7 +1417,7 @@ function getFilteredData() {
         storyHtml += `<h3 class="text-base font-bold mb-3">${title}</h3>`;
 
         // --- Sumar Executiv ---
-        storyHtml += `<p class="text-xs text-gray-400 italic mb-4">Client cu o vechime de <strong>${(c.customer_lifetime / 365).toFixed(1)} ani</strong>, inactiv de <strong>${c.recency} zile</strong>, valoare totală <strong>${c.monetary.toFixed(0)} RON</strong>.</p>`;
+        storyHtml += `<p class="text-xs text-gray-400 italic mb-4">Client cu o vechime totală de <strong>${totalLifetimeYears} ani</strong>, inactiv de <strong>${c.recency} zile</strong>, valoare totală <strong>${c.monetary.toFixed(0)} RON</strong>.</p>`;
         
         // --- Analiză Financiară ---
         storyHtml += `<div class="p-3 rounded-lg bg-black/30">`;
@@ -1439,7 +1446,7 @@ function getFilteredData() {
         if (c.segment === 'Lost' && trend > 70 && c.monetary > 10000) {
             recommendation = `<strong>Prioritate Maximă de Reactivare.</strong> Contactați personalizat, posibil cu o ofertă exclusivă care să adreseze o nevoie din trecut. Potențialul de revenire este foarte mare.`;
         } else if (c.recency >= c.avg_purchase_interval && c.avg_purchase_interval > 0 && c.segment !== 'Lost') {
-            recommendation = `<strong>Acțiune Imediată de Retenție.</strong> Clientul a depășit intervalul său normal de cumpărare. Contactați-l acum cu o ofertă relevantă pentru sezonul <strong>${c.preferred_season}</strong> pentru a preveni pierderea.`;
+            recommendation = `<strong>Acțiune Imediată de Retenție.</strong> Clientul a depășit intervalul său normal de cumpărrare. Contactați-l acum cu o ofertă relevantă pentru sezonul <strong>${c.preferred_season}</strong> pentru a preveni pierderea.`;
         } else if (c.segment === 'VIP Champions') {
             recommendation = `<strong>Menținere Relație Premium.</strong> Acesta este un client de top, activ și loial. Acțiunile trebuie să se concentreze pe oferte exclusive, recunoașterea loialității și noutăți în avanpremieră.`;
         } else if (c.segment === 'Complaint Risk') {
