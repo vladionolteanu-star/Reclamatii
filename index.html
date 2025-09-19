@@ -617,43 +617,31 @@
           return 'At Risk';
         };
         
-        const calculateMobexpertScore = (customer) => {
-            // MOBEXPERT ADAPTED SCORING (0-100)
-            
-            // 1. Recency - 30% (normalized on 2 years for home & deco)
+const calculateMobexpertScore = (customer) => {
+            // --- Componente de Scor ---
             const recencyScore = Math.max(0, 100 - (customer.recency * (100/730)));
-            
-            // 2. Average Order Value - 25%
             const avgOrderScore = Math.min(100, Math.log10(customer.avg_order_value + 1) * 22);
-            
-            // 3. Cross-sell (product categories) - 15%
             const crossSellScore = Math.min(100, customer.product_categories * 25);
-            
-            // 4. Customer Lifetime - 10%
             const lifetimeScore = Math.min(100, Math.log10(customer.customer_lifetime + 1) * 23);
+            const trendScore = customer.trend_monetary; // Folosim direct trendul monetar, deja calculat între 0-100
             
-            // 5. Product Type Impact - 10%
+            // Componentă NOUĂ: Scorul pentru Valoarea Totală
+            const totalValueScore = Math.min(100, Math.log10(customer.monetary + 1) * 15);
+
             let productScore = 50;
             if (customer.customer_type === 'Premium') productScore = 100;
             else if (customer.customer_type === 'Valuable') productScore = 80;
             else if (customer.customer_type === 'Diverse') productScore = 70;
-            
-            // 6. Trend (3-axis combined) - 5%
-            const trendScore = (customer.trend_frequency * 0.4 + 
-                                customer.trend_value * 0.4 + 
-                                customer.trend_monetary * 0.2) / 100 * 100;
-            
-            // 7. Purchase Cycles - 5%
-            const cycleScore = Math.min(100, customer.purchase_cycles * 10);
-            
+
+            // --- PONDERI REVIZUITE ---
             const complexScore = (
-                recencyScore * 0.30 +
-                avgOrderScore * 0.25 +
-                crossSellScore * 0.15 +
-                lifetimeScore * 0.10 +
-                productScore * 0.10 +
-                trendScore * 0.05 +
-                cycleScore * 0.05
+                recencyScore * 0.25 +      // Redus la 25%
+                totalValueScore * 0.20 +   // NOU: Valoarea Totală are 20%
+                lifetimeScore * 0.15 +     // Crescut la 15%
+                avgOrderScore * 0.15 +     // Redus la 15%
+                crossSellScore * 0.10 +    // Redus la 10%
+                productScore * 0.10 +      // Menținut la 10%
+                trendScore * 0.05          // Menținut la 5%
             );
             
             return {
@@ -665,7 +653,7 @@
                     lifetime: lifetimeScore.toFixed(1),
                     productType: productScore.toFixed(1),
                     trend: trendScore.toFixed(1),
-                    cycles: cycleScore.toFixed(1)
+                    totalValue: totalValueScore.toFixed(1) // Adăugat pentru a putea fi văzut în tooltip
                 }
             };
         };
