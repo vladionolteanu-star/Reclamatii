@@ -1152,80 +1152,95 @@
         // STAGE 4: Determine Segments & Complex Score
         self.postMessage({ type: 'progress', text: 'Calcul scor complex și segmentare...', details: '', percent: 70 });
         
-        const determineSegment = (r, f, m, recency, cycles) => {
-          // VIP Champions - best customers
-          if (r >= 4 && f >= 4 && m >= 3) return 'VIP Champions';
-          
-          // Loyal Customers - regular buyers
-          if (r >= 3 && f >= 3) return 'Loyal Customers';
-          
-          // Growth Potential - recent but low frequency
-          if (r >= 4 && f <= 2) return 'Growth Potential';
-          
-          // New Customers - very recent, first purchases
-          if (r >= 4 && cycles <= 1) return 'New Customers';
-          
-          // Declining - decreasing engagement
-          if (r === 3 && f <= 2) return 'Declining';
-          
-          // At Risk - valuable but inactive
-          if (r <= 2 && (f >= 3 || m >= 3)) return 'At Risk';
-          
-          // Dormant - long inactive
-          if (r <= 2 && f <= 2) return 'Dormant';
-          
-          // Lost - very long inactive
-          if (r === 1 || recency > 730) return 'Lost';
-          
-          return 'At Risk';
-        };
+        const determineSegment = (r, f, m, recency, cycles, monetary, lifetime) => {
+    // VIP Champions - cei mai valoroși
+    if (monetary > 20000 && f >= 4 && r >= 3) return 'VIP Champions';
+    if (monetary > 15000 && f >= 3 && r >= 4) return 'VIP Champions';
+    
+    // Loyal Customers - constanți și valoroși
+    if (lifetime > 730 && f >= 3 && monetary > 5000) return 'Loyal Customers';
+    if (r >= 3 && f >= 3 && m >= 3) return 'Loyal Customers';
+    
+    // Growth Potential - recent activi cu potențial
+    if (r >= 4 && monetary > 2000 && f <= 2) return 'Growth Potential';
+    if (recency < 180 && cycles <= 2 && monetary > 1000) return 'Growth Potential';
+    
+    // New Customers - foarte recenți
+    if (lifetime < 90 && cycles <= 1) return 'New Customers';
+    if (r === 5 && f === 1) return 'New Customers';
+    
+    // Declining - în scădere dar recuperabili
+    if (recency > 365 && recency <= 540 && monetary > 3000) return 'Declining';
+    if (r === 2 && m >= 3) return 'Declining';
+    
+    // At Risk - risc real de pierdere
+    if (recency > 540 && recency <= 730 && monetary > 5000) return 'At Risk';
+    if (recency > 450 && recency <= 730 && f >= 3) return 'At Risk';
+    
+    // Dormant - inactivi prelungit
+    if (recency > 730 && recency <= 1095 && monetary > 1000) return 'Dormant';
+    if (r === 1 && f >= 2 && recency < 1095) return 'Dormant';
+    
+    // Lost - pierduți definitiv
+    if (recency > 1095) return 'Lost';
+    if (recency > 730 && monetary < 1000) return 'Lost';
+    
+    // Default pentru restul
+    return 'At Risk';
+};
         
 const calculateMobexpertScore = (customer) => {
-            // --- Componente de Scor ---
-            const recencyScore = Math.max(0, 100 - (customer.recency * (100/730)));
-            const avgOrderScore = Math.min(100, Math.log10(customer.avg_order_value + 1) * 22);
-            const crossSellScore = Math.min(100, customer.product_categories * 25);
-            const lifetimeScore = Math.min(100, Math.log10(customer.customer_lifetime + 1) * 23);
-            const trendScore = customer.trend_monetary; // Folosim direct trendul monetar, deja calculat între 0-100
-            
-            // Componentă NOUĂ: Scorul pentru Valoarea Totală
-            const totalValueScore = Math.min(100, Math.log10(customer.monetary + 1) * 15);
-
-            let productScore = 50;
-            if (customer.customer_type === 'Premium') productScore = 100;
-            else if (customer.customer_type === 'Valuable') productScore = 80;
-            else if (customer.customer_type === 'Diverse') productScore = 70;
-
-            // --- PONDERI REVIZUITE ---
-            const complexScore = (
-                recencyScore * 0.25 +      // Redus la 25%
-                totalValueScore * 0.20 +   // NOU: Valoarea Totală are 20%
-                lifetimeScore * 0.15 +     // Crescut la 15%
-                avgOrderScore * 0.15 +     // Redus la 15%
-                crossSellScore * 0.10 +    // Redus la 10%
-                productScore * 0.10 +      // Menținut la 10%
-                trendScore * 0.05          // Menținut la 5%
-            );
-            
-            return {
-                score: Math.round(complexScore),
-                components: {
-                    recency: recencyScore.toFixed(1),
-                    avgOrder: avgOrderScore.toFixed(1),
-                    crossSell: crossSellScore.toFixed(1),
-                    lifetime: lifetimeScore.toFixed(1),
-                    productType: productScore.toFixed(1),
-                    trend: trendScore.toFixed(1),
-                    totalValue: totalValueScore.toFixed(1) // Adăugat pentru a putea fi văzut în tooltip
-                }
-            };
-        };
+    // Calculează trend doar pentru clienți cu istoric amplu (>12 luni și >5 tranzacții)
+    let trendScore = 50; // Default neutru
+    if (customer.transactions.length >= 5 && customer.customer_lifetime > 365) {
+        const midPoint = Math.floor(customer.transactions.length / 2);
+        const firstHalf = customer.transactions.slice(0, midPoint);
+        const secondHalf = customer.transactions.slice(midPoint);
+        
+        const avgFirst = firstHalf.reduce((sum, t) => sum + t.value, 0) / firstHalf.length;
+        const avgSecond = secondHalf.reduce((sum, t) => sum + t.value, 0) / secondHalf.length;
+        
+        const percentChange = ((avgSecond - avgFirst) / avgFirst) * 100;
+        trendScore = Math.min(100, Math.max(0, 50 + (percentChange * 2)));
+    }
+    
+    // Scoruri recalculate cu focus pe valoare totală și vechime
+    const totalValueScore = Math.min(100, (customer.monetary / 50000) * 100);
+    const lifetimeScore = Math.min(100, (customer.customer_lifetime / 1460) * 100); // Max 4 ani
+    const frequencyScore = Math.min(100, (customer.invoice_count / 20) * 100);
+    const recencyScore = Math.max(0, 100 - (customer.recency / 365) * 50); // Penalizare mai blândă
+    const avgOrderScore = Math.min(100, (customer.avg_order_value / 5000) * 100);
+    
+    // PONDERI NOI - mai multă valoare pe total, vechime și frecvență
+    const complexScore = (
+        totalValueScore * 0.30 +    // 30% valoare totală
+        lifetimeScore * 0.25 +       // 25% vechime
+        frequencyScore * 0.20 +      // 20% frecvență
+        recencyScore * 0.15 +        // 15% recență
+        avgOrderScore * 0.07 +       // 7% valoare medie
+        trendScore * 0.03            // 3% trend (doar informativ)
+    );
+    
+    return {
+        score: Math.round(complexScore),
+        components: {
+            recency: recencyScore.toFixed(1),
+            avgOrder: avgOrderScore.toFixed(1),
+            crossSell: (customer.product_categories * 20).toFixed(1),
+            lifetime: lifetimeScore.toFixed(1),
+            productType: 50,
+            trend: trendScore.toFixed(1),
+            totalValue: totalValueScore.toFixed(1),
+            frequency: frequencyScore.toFixed(1)
+        }
+    };
+};
 
         customersData = customersData.map(c => {
             const complexScoring = calculateMobexpertScore(c);
             return {
                 ...c,
-                segment: determineSegment(c.rfm_score.r, c.rfm_score.f, c.rfm_score.m, c.recency, c.purchase_cycles),
+                segment: determineSegment(c.rfm_score.r, c.rfm_score.f, c.rfm_score.m, c.recency, c.purchase_cycles, c.monetary, c.customer_lifetime),
                 score: complexScoring.score,
                 score_components: complexScoring.components
             };
