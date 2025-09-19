@@ -192,14 +192,14 @@
                   <th class="px-4 py-3 text-left">ID Client</th>
                   <th class="px-4 py-3 text-left">Email</th>
                   <th class="px-4 py-3 text-left">Segment</th>
-                 <th class="px-4 py-3 text-right cursor-help" title="Click pentru detalii">Scor</th>
+                  <th class="px-4 py-3 text-right cursor-help" title="Click pentru detalii">Scor</th>
                   <th class="px-4 py-3 text-right">Trend</th>
+                  <th class="px-4 py-3 text-right">Prima Achiziție</th>
                   <th class="px-4 py-3 text-right">Ultima Achiziție</th>
                   <th class="px-4 py-3 text-right">Zile Inactiv</th>
                   <th class="px-4 py-3 text-right">Valoare Totală</th>
                   <th class="px-4 py-3 text-right">Nr. Facturi</th>
                   <th class="px-4 py-3 text-right">Val. Medie</th>
-                  <th class="px-4 py-3 text-center">Tip Client</th>
                   <th class="px-4 py-3 text-center">Reclamație</th>
                   <th class="px-4 py-3 text-left">Status Post-Recl</th>
                 </tr>
@@ -1112,12 +1112,12 @@ function getFilteredData() {
                     </span>
                 </td>
                 <td class="px-4 py-2 text-right font-mono">${Math.round(c.score_components.trend)}</td>
+                <td class="px-4 py-2 text-right text-xs">${new Date(c.first_purchase).toLocaleDateString('ro-RO')}</td>
                 <td class="px-4 py-2 text-right text-xs">${new Date(c.last_purchase).toLocaleDateString('ro-RO')}</td>
                 <td class="px-4 py-2 text-right">${c.recency}</td>
                 <td class="px-4 py-2 text-right">${c.monetary.toFixed(0)}</td>
                 <td class="px-4 py-2 text-right">${c.invoice_count || c.purchase_cycles}</td>
                 <td class="px-4 py-2 text-right">${c.avg_order_value.toFixed(0)}</td>
-                <td class="px-4 py-2 text-center text-xs">${c.customer_type}</td>
                 <td class="px-4 py-2 text-center">${complaintInfo}</td>
                 <td class="px-4 py-2">${statusPostComplaint}</td>
             </tr>`;
