@@ -569,6 +569,7 @@
           </div>
           <div class="flex items-center space-x-6">
             <button onclick="exportResults()" class="btn-cyber px-6 py-3 rounded-xl text-sm font-semibold tracking-wide">Export CSV</button>
+            <button onclick="exportResults()" class="btn-cyber px-6 py-3 rounded-xl text-sm font-semibold tracking-wide">Generează Listă Săptămânală</button>
             <div class="text-xs text-gray-400 mono space-x-3">
               <span class="text-gray-500">Total:</span>
               <span class="text-white font-bold" id="totalCustomers">0</span> clienți
@@ -632,14 +633,22 @@
           </div>
 
           <div>
-            <label class="block text-xs text-gray-500 mb-2 mono uppercase tracking-wider">Filtre</label>
-            <div class="p-2.5 input-dark rounded-lg flex items-center justify-center h-[34px]">
-              <label for="filterHasComplaint" class="flex items-center space-x-2 cursor-pointer group">
-                <input type="checkbox" id="filterHasComplaint" class="w-4 h-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-600 cursor-pointer">
-                <span class="text-xs text-gray-400 group-hover:text-white transition-colors">CU RECLAMAȚII</span>
-              </label>
-            </div>
-          </div>
+  <label class="block text-xs text-gray-500 mb-2 mono uppercase tracking-wider">Filtre Comportament</label>
+  <div class="p-2.5 input-dark rounded-lg flex flex-col items-start space-y-2 h-auto">
+    <label for="filterHasComplaint" class="flex items-center space-x-2 cursor-pointer group">
+      <input type="checkbox" id="filterHasComplaint" class="w-4 h-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-600 cursor-pointer">
+      <span class="text-xs text-gray-400 group-hover:text-white transition-colors">CU RECLAMAȚII</span>
+    </label>
+    <label for="filterReadyPurchase" class="flex items-center space-x-2 cursor-pointer group">
+      <input type="checkbox" id="filterReadyPurchase" class="w-4 h-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-600 cursor-pointer">
+      <span class="text-xs text-gray-400 group-hover:text-white transition-colors">GATA DE ACHIZIȚIE</span>
+    </label>
+    <label for="filterOverduePurchase" class="flex items-center space-x-2 cursor-pointer group">
+      <input type="checkbox" id="filterOverduePurchase" class="w-4 h-4 rounded bg-gray-900 border-gray-600 text-green-500 focus:ring-green-600 cursor-pointer">
+      <span class="text-xs text-gray-400 group-hover:text-white transition-colors">PERIOADĂ DEPĂȘITĂ</span>
+    </label>
+  </div>
+</div>
           
           <div>
             <label class="block text-xs text-gray-500 mb-2 mono uppercase tracking-wider">Căutare</label>
@@ -1386,6 +1395,8 @@ const calculateMobexpertScore = (customer) => {
         document.getElementById('filterEmail').addEventListener('change', renderTable);
         document.getElementById('searchInput').addEventListener('input', renderTable);
         document.getElementById('filterHasComplaint').addEventListener('change', renderTable); // <-- LINIA NOUĂ
+      document.getElementById('filterReadyPurchase').addEventListener('change', renderTable);
+document.getElementById('filterOverduePurchase').addEventListener('change', renderTable);
     }
     // Handle multiple sales files
     function handleFileInput(event) {
@@ -1582,40 +1593,63 @@ const calculateMobexpertScore = (customer) => {
     }
 
 function getFilteredData() {
-        let filtered = [...customersData];
-        
-        // Filter by email
-        const emailFilter = document.getElementById('filterEmail').value;
-        if (emailFilter === 'with') {
-            filtered = filtered.filter(c => c.has_email === true);
-        } else if (emailFilter === 'without') {
-            filtered = filtered.filter(c => c.has_email === false);
-        }
-        
-        // Filter by segment
-        const segmentFilter = document.getElementById('filterSegment').value;
-        if (segmentFilter !== 'all') {
-            filtered = filtered.filter(c => c.segment === segmentFilter);
-        }
+    let filtered = [...customersData];
 
-        // Filter by complaint checkbox
-        const complaintFilter = document.getElementById('filterHasComplaint').checked;
-        if (complaintFilter) {
-            filtered = filtered.filter(c => c.has_complaint === true);
-        }
-        
-        // Search filter
-        const search = document.getElementById('searchInput').value.toLowerCase();
-        if (search) {
-            filtered = filtered.filter(c => 
-                String(c.id).toLowerCase().includes(search) ||
-                c.email.toLowerCase().includes(search) ||
-                (c.original_segment || c.segment).toLowerCase().includes(search)
-            );
-        }
-        
-        return filtered;
+    // Filter by email
+    const emailFilter = document.getElementById('filterEmail').value;
+    if (emailFilter === 'with') {
+        filtered = filtered.filter(c => c.has_email === true);
+    } else if (emailFilter === 'without') {
+        filtered = filtered.filter(c => c.has_email === false);
     }
+
+    // Filter by segment
+    const segmentFilter = document.getElementById('filterSegment').value;
+    if (segmentFilter !== 'all') {
+        filtered = filtered.filter(c => c.segment === segmentFilter);
+    }
+
+    // Filter by complaint checkbox
+    const complaintFilter = document.getElementById('filterHasComplaint').checked;
+    if (complaintFilter) {
+        filtered = filtered.filter(c => c.has_complaint === true);
+    }
+
+    // --- AICI ESTE LOGICA NOUĂ ADAUGATĂ ---
+    const readyForPurchase = document.getElementById('filterReadyPurchase').checked;
+    const overduePurchase = document.getElementById('filterOverduePurchase').checked;
+
+    if (readyForPurchase) {
+        filtered = filtered.filter(c => {
+            // Un client e "gata de achizitie" daca intervalul mediu exista (nu e 0)
+            // si se afla in "fereastra de cumparare" (ex: cu 14 zile inainte de a se implini intervalul mediu).
+            return c.avg_purchase_interval > 0 && 
+                   c.recency >= (c.avg_purchase_interval - 14) && 
+                   c.recency < c.avg_purchase_interval;
+        });
+    }
+
+    if (overduePurchase) {
+        filtered = filtered.filter(c => {
+            // Un client a "depasit perioada" daca intervalul mediu exista (nu e 0)
+            // si au trecut mai multe zile de la ultima achizitie decat intervalul mediu.
+            return c.avg_purchase_interval > 0 && c.recency > c.avg_purchase_interval;
+        });
+    }
+    // --- FINAL LOGICĂ NOUĂ ---
+
+    // Search filter
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    if (search) {
+        filtered = filtered.filter(c => 
+            String(c.id).toLowerCase().includes(search) ||
+            c.email.toLowerCase().includes(search) ||
+            (c.original_segment || c.segment).toLowerCase().includes(search)
+        );
+    }
+
+    return filtered;
+}
 // Render table
     function renderTable() {
         const data = getFilteredData(); // Obține datele filtrate
