@@ -192,7 +192,8 @@
                   <th class="px-4 py-3 text-left">ID Client</th>
                   <th class="px-4 py-3 text-left">Email</th>
                   <th class="px-4 py-3 text-left">Segment</th>
-                  <th class="px-4 py-3 text-right cursor-help" title="Click pentru detalii">Scor</th>
+                 <th class="px-4 py-3 text-right cursor-help" title="Click pentru detalii">Scor</th>
+                  <th class="px-4 py-3 text-right">Trend</th>
                   <th class="px-4 py-3 text-right">Ultima Achiziție</th>
                   <th class="px-4 py-3 text-right">Zile Inactiv</th>
                   <th class="px-4 py-3 text-right">Valoare Totală</th>
@@ -1122,6 +1123,7 @@ function getFilteredData() {
                           ${c.score}
                     </span>
                 </td>
+                <td class="px-4 py-2 text-right font-mono">${Math.round(c.score_components.trend)}</td>
                 <td class="px-4 py-2 text-right text-xs">${new Date(c.last_purchase).toLocaleDateString('ro-RO')}</td>
                 <td class="px-4 py-2 text-right">${c.recency}</td>
                 <td class="px-4 py-2 text-right">${c.monetary.toFixed(0)}</td>
