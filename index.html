@@ -732,7 +732,7 @@ const calculateMobexpertScore = (customer) => {
             }
         });
         
-        customersData.sort((a,b) => b.score - a.score);
+        customersData.sort((a,b) => b.monetary - a.monetary);
         self.postMessage({ type: 'complete', data: customersData, totalInvoices: totalInvoices });
       };
     `;
