@@ -2096,202 +2096,320 @@ function generateClientStory(customerId) {
     const c = customersData.find(cust => cust.id == customerId);
     if (!c) return;
 
-    const now = new Date();
-    const firstPurchaseDate = new Date(c.first_purchase);
-    const totalLifetimeDays = Math.floor((now - firstPurchaseDate) / (1000 * 60 * 60 * 24));
-    const totalLifetimeYears = totalLifetimeDays / 365;
-    
-    if (totalLifetimeYears < 3 || c.invoice_count < 10) {
-        alert('Analiza disponibilă doar pentru clienți cu minim 3 ani vechime și 10 facturi.');
+    // Analiza profundă doar pentru clienți cu istoric solid
+    if (c.transactions.length < 3) {
+        alert('Istoric insuficient pentru analiză detaliată.');
         return;
     }
 
-    // Analiză profundă comportament
-    const furnitureOrders = c.transactions.filter(t => t.value > 2500).sort((a,b) => a.date - b.date);
-    const smallOrders = c.transactions.filter(t => t.value <= 500);
-    const midOrders = c.transactions.filter(t => t.value > 500 && t.value <= 2500);
+    const now = new Date('2025-09-20'); // Data fixă pentru consistență
+    const firstPurchaseDate = new Date(c.first_purchase);
+    const lastPurchaseDate = new Date(c.last_purchase);
+    const totalLifetimeDays = Math.floor((lastPurchaseDate - firstPurchaseDate) / (1000 * 60 * 60 * 24));
     
-    // Calculează intervale între achiziții mari
-    let furnitureIntervals = [];
-    let lastBigPurchaseValue = 0;
-    if (furnitureOrders.length > 1) {
-        for (let i = 1; i < furnitureOrders.length; i++) {
-            const daysBetween = Math.floor((furnitureOrders[i].date - furnitureOrders[i-1].date) / (1000 * 60 * 60 * 24));
-            if (daysBetween > 0) furnitureIntervals.push(daysBetween);
-        }
-        lastBigPurchaseValue = furnitureOrders[furnitureOrders.length - 1].value;
-    }
+    // Sortăm tranzacțiile cronologic pentru analiză
+    const sortedTransactions = [...c.transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
     
-    const avgFurnitureInterval = furnitureIntervals.length > 0 ? 
-        Math.round(furnitureIntervals.reduce((a,b) => a+b, 0) / furnitureIntervals.length) : 0;
+    // ANALIZĂ 1: Profilul de cumpărare
+    const purchaseProfile = analyzePurchaseProfile(sortedTransactions);
     
-    const lastFurnitureDate = furnitureOrders.length > 0 ? 
-        furnitureOrders[furnitureOrders.length - 1].date : null;
-    const daysSinceLastFurniture = lastFurnitureDate ? 
-        Math.floor((now - lastFurnitureDate) / (1000 * 60 * 60 * 24)) : 999999;
-
-    // Analiză evoluție în timp
-    const purchasesByYear = {};
-    c.transactions.forEach(t => {
-        const year = new Date(t.date).getFullYear();
-        if (!purchasesByYear[year]) purchasesByYear[year] = {
-            count: 0, 
-            value: 0, 
-            furniture: 0,
-            maxPurchase: 0,
-            avgValue: 0
-        };
-        purchasesByYear[year].count++;
-        purchasesByYear[year].value += t.value;
-        if (t.value > 2500) purchasesByYear[year].furniture++;
-        if (t.value > purchasesByYear[year].maxPurchase) {
-            purchasesByYear[year].maxPurchase = t.value;
-        }
-    });
+    // ANALIZĂ 2: Detectare pattern-uri
+    const patterns = detectPurchasePatterns(sortedTransactions);
     
-    // Calculează media per an
-    Object.keys(purchasesByYear).forEach(year => {
-        purchasesByYear[year].avgValue = purchasesByYear[year].value / purchasesByYear[year].count;
-    });
-
-    // Detectează pattern-uri
-    const years = Object.keys(purchasesByYear).sort();
-    const recentYear = years[years.length - 1];
-    const oldYear = years[0];
-    const evolutionRate = purchasesByYear[recentYear] && purchasesByYear[oldYear] ? 
-        ((purchasesByYear[recentYear].avgValue - purchasesByYear[oldYear].avgValue) / purchasesByYear[oldYear].avgValue * 100).toFixed(0) : 0;
-
-    // Identifică tipul de client
-    let clientProfile = '';
-    let behaviorInsight = '';
+    // ANALIZĂ 3: Evoluție în timp
+    const evolution = analyzeEvolution(sortedTransactions);
     
-    if (furnitureOrders.length >= 5 && avgFurnitureInterval < 365) {
-        clientProfile = 'Colecționar Pasionat';
-        behaviorInsight = `Acest client renovează frecvent, la fiecare ${(avgFurnitureInterval/30).toFixed(0)} luni. Este pasionat de design interior și probabil urmărește tendințele.`;
-    } else if (furnitureOrders.length > 0 && avgFurnitureInterval > 730) {
-        clientProfile = 'Renovator Ciclic';
-        behaviorInsight = `Clientul investește masiv dar rar (la ${(avgFurnitureInterval/365).toFixed(1)} ani). Achizițiile sunt planificate și substanțiale (ultima: ${lastBigPurchaseValue.toFixed(0)} RON).`;
-    } else if (smallOrders.length > furnitureOrders.length * 3) {
-        clientProfile = 'Decorator Frecvent';
-        behaviorInsight = `Preferă schimbări mici și dese. ${smallOrders.length} achiziții de accesorii vs ${furnitureOrders.length} piese mari. Client fidel pentru decorațiuni sezoniere.`;
-    } else if (evolutionRate > 50) {
-        clientProfile = 'În Ascensiune';
-        behaviorInsight = `Puterea de cumpărare a crescut cu ${evolutionRate}%. De la ${purchasesByYear[oldYear].avgValue.toFixed(0)} RON medie în ${oldYear} la ${purchasesByYear[recentYear].avgValue.toFixed(0)} RON recent.`;
-    } else if (c.has_complaint && c.no_orders_after_complaint) {
-        clientProfile = 'Pierdut Post-Incident';
-        behaviorInsight = `După reclamația din ${new Date(c.last_complaint_date).toLocaleDateString('ro-RO')}, clientul nu a mai revenit. Pierdere estimată: ${(c.avg_order_value * 2).toFixed(0)} RON/an.`;
-    } else {
-        clientProfile = 'Standard Matur';
-        behaviorInsight = `Client echilibrat cu ${c.invoice_count} tranzacții în ${totalLifetimeYears.toFixed(1)} ani. Mix sănătos între mobilier și accesorii.`;
-    }
+    // ANALIZĂ 4: Predicții
+    const predictions = makePredictions(c, sortedTransactions);
 
-    // Calculează momentul optim pentru contact
-    let contactTiming = '';
-    const monthsUntilReady = avgFurnitureInterval > 0 ? 
-        Math.max(0, (avgFurnitureInterval - daysSinceLastFurniture) / 30).toFixed(1) : 0;
-    
-    if (daysSinceLastFurniture > avgFurnitureInterval * 1.5 && avgFurnitureInterval > 0) {
-        contactTiming = 'DEPĂȘIT - Risc major de pierdere. Contact urgent necesar.';
-    } else if (daysSinceLastFurniture >= avgFurnitureInterval * 0.8 && avgFurnitureInterval > 0) {
-        contactTiming = 'ACUM - Clientul intră în perioada de decizie.';
-    } else if (monthsUntilReady > 0 && monthsUntilReady < 12) {
-        contactTiming = `În ${monthsUntilReady} luni - Pregătiți campanie targetată.`;
-    } else {
-        contactTiming = 'Monitorizare standard - Nu există urgență.';
-    }
+    // Generăm HTML-ul pentru story
+    let storyHtml = `
+        <div class="space-y-4">
+            <!-- Header -->
+            <div class="border-b border-gray-700 pb-3">
+                <h3 class="text-lg font-bold text-green-400">Client ID: ${c.id}</h3>
+                <div class="text-xs text-gray-400 mt-1">
+                    ${c.invoice_count} facturi • ${totalLifetimeDays} zile istoric • 
+                    Valoare totală: ${c.monetary.toFixed(0)} RON
+                </div>
+            </div>
 
-    // Generează story
-    let storyHtml = '';
-    
-    storyHtml += `<div class="mb-4 flex justify-between items-start">`;
-    storyHtml += `<h3 class="text-lg font-bold text-green-400">${clientProfile}</h3>`;
-    storyHtml += `<button onclick="hideStoryModal()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>`;
-    storyHtml += `</div>`;
+            <!-- Profil de cumpărare -->
+            <div class="bg-gradient-to-r from-blue-900/20 to-transparent p-4 rounded-lg border-l-4 border-blue-500">
+                <h4 class="text-sm font-bold text-blue-400 mb-2">📊 Profil Comportamental</h4>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Tip predominant:</span>
+                        <span class="text-white font-medium">${purchaseProfile.type}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Valoare medie comandă:</span>
+                        <span class="text-white">${purchaseProfile.avgValue.toFixed(0)} RON</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Interval mediu achiziții:</span>
+                        <span class="text-white">${purchaseProfile.avgInterval} zile</span>
+                    </div>
+                    ${purchaseProfile.insight ? 
+                        `<div class="mt-2 pt-2 border-t border-gray-700 text-xs text-gray-300">
+                            💡 ${purchaseProfile.insight}
+                        </div>` : ''}
+                </div>
+            </div>
 
-    storyHtml += `<div class="space-y-4">`;
-    
-    // Insight principal
-    storyHtml += `<div class="p-3 bg-blue-900/20 rounded-lg border-l-4 border-blue-500">`;
-    storyHtml += `<p class="text-sm leading-relaxed">${behaviorInsight}</p>`;
-    storyHtml += `</div>`;
+            <!-- Pattern-uri detectate -->
+            ${patterns.length > 0 ? `
+                <div class="bg-gradient-to-r from-purple-900/20 to-transparent p-4 rounded-lg border-l-4 border-purple-500">
+                    <h4 class="text-sm font-bold text-purple-400 mb-2">🔍 Pattern-uri Identificate</h4>
+                    <ul class="space-y-1 text-sm text-gray-300">
+                        ${patterns.map(p => `<li>• ${p}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : ''}
 
-    // Istoricul achizițiilor
-    storyHtml += `<div class="p-3 bg-gray-800/50 rounded-lg">`;
-    storyHtml += `<h4 class="font-semibold text-white mb-2">Evoluția Comportamentului</h4>`;
-    storyHtml += `<div class="space-y-2 text-xs">`;
-    
-    const lastThreeYears = years.slice(-3).reverse();
-    lastThreeYears.forEach(year => {
-        const data = purchasesByYear[year];
-        const barWidth = (data.value / Math.max(...Object.values(purchasesByYear).map(y => y.value)) * 100).toFixed(0);
-        storyHtml += `<div>`;
-        storyHtml += `<div class="flex justify-between mb-1">`;
-        storyHtml += `<span class="text-gray-400">${year}</span>`;
-        storyHtml += `<span class="text-white">${data.value.toFixed(0)} RON</span>`;
-        storyHtml += `</div>`;
-        storyHtml += `<div class="w-full bg-gray-700 rounded-full h-2">`;
-        storyHtml += `<div class="bg-gradient-to-r from-green-600 to-green-400 h-2 rounded-full" style="width: ${barWidth}%"></div>`;
-        storyHtml += `</div>`;
-        storyHtml += `<div class="text-gray-500 mt-1">${data.count} comenzi, ${data.furniture} mobilier</div>`;
-        storyHtml += `</div>`;
-    });
-    
-    storyHtml += `</div>`;
-    storyHtml += `</div>`;
+            <!-- Evoluție -->
+            <div class="bg-gradient-to-r from-green-900/20 to-transparent p-4 rounded-lg border-l-4 border-green-500">
+                <h4 class="text-sm font-bold text-green-400 mb-3">📈 Evoluție Temporală</h4>
+                ${evolution.html}
+            </div>
 
-    // Timing și oportunitate
-    if (avgFurnitureInterval > 0) {
-        storyHtml += `<div class="p-3 bg-purple-900/20 rounded-lg border-l-4 ${
-            contactTiming.includes('ACUM') ? 'border-yellow-500' : 
-            contactTiming.includes('DEPĂȘIT') ? 'border-red-500' : 
-            'border-purple-500'
-        }">`;
-        storyHtml += `<h4 class="font-semibold text-white mb-2">Fereastră de Oportunitate</h4>`;
-        storyHtml += `<p class="text-sm"><strong>Ciclu mediu mobilier:</strong> ${(avgFurnitureInterval/30).toFixed(0)} luni</p>`;
-        storyHtml += `<p class="text-sm"><strong>Ultima achiziție majoră:</strong> acum ${(daysSinceLastFurniture/30).toFixed(0)} luni</p>`;
-        storyHtml += `<p class="text-sm font-bold ${
-            contactTiming.includes('ACUM') ? 'text-yellow-400' : 
-            contactTiming.includes('DEPĂȘIT') ? 'text-red-400' : 
-            'text-gray-300'
-        }">Moment contact: ${contactTiming}</p>`;
-        storyHtml += `</div>`;
-    }
+            <!-- Predicții și oportunități -->
+            <div class="bg-gradient-to-r from-yellow-900/20 to-transparent p-4 rounded-lg border-l-4 border-yellow-500">
+                <h4 class="text-sm font-bold text-yellow-400 mb-2">🎯 Analiză Predictivă</h4>
+                <div class="space-y-2 text-sm">
+                    ${predictions.nextPurchase ? `
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Următoarea achiziție probabilă:</span>
+                            <span class="text-white font-medium">${predictions.nextPurchase}</span>
+                        </div>
+                    ` : ''}
+                    ${predictions.estimatedValue ? `
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Valoare estimată:</span>
+                            <span class="text-white">${predictions.estimatedValue}</span>
+                        </div>
+                    ` : ''}
+                    ${predictions.risk ? `
+                        <div class="mt-2 p-2 bg-red-900/30 rounded border border-red-500/30">
+                            <span class="text-red-400 text-xs">⚠️ ${predictions.risk}</span>
+                        </div>
+                    ` : ''}
+                    ${predictions.opportunity ? `
+                        <div class="mt-2 p-2 bg-green-900/30 rounded border border-green-500/30">
+                            <span class="text-green-400 text-xs">✨ ${predictions.opportunity}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
 
-    // Predicție valoare
-    if (furnitureOrders.length >= 2) {
-        const avgFurnitureValue = furnitureOrders.reduce((sum, o) => sum + o.value, 0) / furnitureOrders.length;
-        const trend = lastBigPurchaseValue > avgFurnitureValue ? 'crescătoare' : 'stabilă';
-        
-        storyHtml += `<div class="p-3 bg-green-900/20 rounded-lg">`;
-        storyHtml += `<h4 class="font-semibold text-white mb-2">Potențial Următoare Tranzacție</h4>`;
-        storyHtml += `<p class="text-sm">Bazat pe istoric: <strong>${(avgFurnitureValue * 0.9).toFixed(0)} - ${(avgFurnitureValue * 1.1).toFixed(0)} RON</strong></p>`;
-        storyHtml += `<p class="text-sm text-gray-400">Tendință ${trend}, ultima: ${lastBigPurchaseValue.toFixed(0)} RON</p>`;
-        storyHtml += `</div>`;
-    }
-
-    // Riscuri și atenționări
-    if (c.has_complaint || c.recency > 500 || evolutionRate < -30) {
-        storyHtml += `<div class="p-3 bg-red-900/20 rounded-lg border border-red-500/30">`;
-        storyHtml += `<h4 class="font-semibold text-red-400 mb-2">⚠️ Factori de Risc</h4>`;
-        storyHtml += `<ul class="text-sm space-y-1">`;
-        if (c.has_complaint) {
-            storyHtml += `<li>• Istoric reclamații (${c.complaints.length})</li>`;
-        }
-        if (c.recency > 500) {
-            storyHtml += `<li>• Inactiv de ${(c.recency/30).toFixed(0)} luni</li>`;
-        }
-        if (evolutionRate < -30) {
-            storyHtml += `<li>• Valoare în scădere (${evolutionRate}%)</li>`;
-        }
-        storyHtml += `</ul>`;
-        storyHtml += `</div>`;
-    }
-
-    storyHtml += `</div>`;
+            <!-- Istoric reclamații dacă există -->
+            ${c.has_complaint ? `
+                <div class="bg-gradient-to-r from-red-900/20 to-transparent p-4 rounded-lg border-l-4 border-red-500">
+                    <h4 class="text-sm font-bold text-red-400 mb-2">⚠️ Istoric Reclamații</h4>
+                    <div class="text-sm text-gray-300">
+                        <p>${c.complaints.length} reclamații înregistrate</p>
+                        <p class="text-xs text-gray-400 mt-1">
+                            Ultima: ${new Date(c.last_complaint_date).toLocaleDateString('ro-RO')}
+                        </p>
+                        ${c.no_orders_after_complaint ? 
+                            '<p class="text-red-400 font-bold mt-2">Client pierdut după reclamație!</p>' :
+                            '<p class="text-green-400 mt-2">Client activ după rezolvare</p>'
+                        }
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
 
     showStoryModal(storyHtml);
 }
+
+// Funcții auxiliare pentru analiză
+function analyzePurchaseProfile(transactions) {
+    const values = transactions.map(t => t.value);
+    const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
     
+    // Calculăm intervalele între achiziții
+    const intervals = [];
+    for (let i = 1; i < transactions.length; i++) {
+        const days = Math.floor((new Date(transactions[i].date) - new Date(transactions[i-1].date)) / (1000 * 60 * 60 * 24));
+        if (days > 0) intervals.push(days);
+    }
+    const avgInterval = intervals.length > 0 ? Math.round(intervals.reduce((a, b) => a + b, 0) / intervals.length) : 0;
+    
+    // Determinăm tipul de client
+    let type = 'Ocazional';
+    let insight = '';
+    
+    const largeOrders = values.filter(v => v > 5000).length;
+    const smallOrders = values.filter(v => v < 500).length;
+    const consistency = Math.max(...values) / Math.min(...values);
+    
+    if (largeOrders >= transactions.length * 0.5) {
+        type = 'Premium Consistent';
+        insight = 'Preferă achiziții substanțiale, probabil renovări complete sau piese statement.';
+    } else if (smallOrders >= transactions.length * 0.7) {
+        type = 'Decorator Frecvent';
+        insight = 'Focus pe accesorii și decorațiuni, schimbări frecvente de stil.';
+    } else if (consistency < 3 && avgInterval < 90) {
+        type = 'Loial Echilibrat';
+        insight = 'Comportament predictibil, achiziții regulate și consistente ca valoare.';
+    } else if (avgInterval > 365) {
+        type = 'Sezonier';
+        insight = `Revine rar (la ~${(avgInterval/365).toFixed(1)} ani), probabil pentru renovări majore.`;
+    } else if (consistency > 10) {
+        type = 'Imprevizibil';
+        insight = 'Variație mare între comenzi - de la decorațiuni mici la mobilier major.';
+    }
+    
+    return {
+        type,
+        avgValue,
+        avgInterval,
+        insight
+    };
+}
+
+function detectPurchasePatterns(transactions) {
+    const patterns = [];
+    
+    // Pattern 1: Creștere sau descreștere constantă
+    if (transactions.length >= 5) {
+        const firstHalf = transactions.slice(0, Math.floor(transactions.length / 2));
+        const secondHalf = transactions.slice(Math.floor(transactions.length / 2));
+        
+        const avgFirst = firstHalf.reduce((sum, t) => sum + t.value, 0) / firstHalf.length;
+        const avgSecond = secondHalf.reduce((sum, t) => sum + t.value, 0) / secondHalf.length;
+        
+        if (avgSecond > avgFirst * 1.3) {
+            patterns.push('Valoare în creștere constantă (+' + ((avgSecond/avgFirst - 1) * 100).toFixed(0) + '%)');
+        } else if (avgSecond < avgFirst * 0.7) {
+            patterns.push('Valoare în scădere (-' + ((1 - avgSecond/avgFirst) * 100).toFixed(0) + '%)');
+        }
+    }
+    
+    // Pattern 2: Sezonalitate
+    const monthCounts = {};
+    transactions.forEach(t => {
+        const month = new Date(t.date).getMonth();
+        monthCounts[month] = (monthCounts[month] || 0) + 1;
+    });
+    
+    const maxMonth = Object.keys(monthCounts).reduce((max, m) => 
+        monthCounts[m] > (monthCounts[max] || 0) ? m : max, null);
+    
+    if (maxMonth !== null && monthCounts[maxMonth] >= transactions.length * 0.3) {
+        const monthNames = ['Ian', 'Feb', 'Mar', 'Apr', 'Mai', 'Iun', 'Iul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        patterns.push(`Preferință sezonieră: ${monthNames[maxMonth]} (${monthCounts[maxMonth]} achiziții)`);
+    }
+    
+    // Pattern 3: Achiziții în rafală
+    let bursts = 0;
+    for (let i = 1; i < transactions.length; i++) {
+        const days = (new Date(transactions[i].date) - new Date(transactions[i-1].date)) / (1000 * 60 * 60 * 24);
+        if (days <= 30) bursts++;
+    }
+    if (bursts >= transactions.length * 0.3) {
+        patterns.push('Tendință de achiziții grupate (mobilare completă)');
+    }
+    
+    // Pattern 4: Mix de produse
+    const large = transactions.filter(t => t.value > 3000).length;
+    const medium = transactions.filter(t => t.value >= 500 && t.value <= 3000).length;
+    const small = transactions.filter(t => t.value < 500).length;
+    
+    if (large > 0 && small > 0 && medium > 0) {
+        patterns.push(`Mix diversificat: ${large} mobilier mare, ${medium} piese medii, ${small} decorațiuni`);
+    }
+    
+    return patterns;
+}
+
+function analyzeEvolution(transactions) {
+    // Grupăm pe ani
+    const byYear = {};
+    transactions.forEach(t => {
+        const year = new Date(t.date).getFullYear();
+        if (!byYear[year]) byYear[year] = [];
+        byYear[year].push(t);
+    });
+    
+    const years = Object.keys(byYear).sort().slice(-4); // Ultimii 4 ani max
+    
+    let html = '<div class="space-y-2">';
+    
+    years.forEach(year => {
+        const yearTransactions = byYear[year];
+        const totalValue = yearTransactions.reduce((sum, t) => sum + t.value, 0);
+        const avgValue = totalValue / yearTransactions.length;
+        
+        // Calculăm width pentru bar chart
+        const maxYearValue = Math.max(...years.map(y => 
+            byYear[y].reduce((sum, t) => sum + t.value, 0)
+        ));
+        const barWidth = (totalValue / maxYearValue * 100).toFixed(0);
+        
+        html += `
+            <div class="text-xs">
+                <div class="flex justify-between mb-1">
+                    <span class="text-gray-400">${year}</span>
+                    <span class="text-white">${totalValue.toFixed(0)} RON</span>
+                </div>
+                <div class="w-full bg-gray-700 rounded-full h-2">
+                    <div class="bg-gradient-to-r from-green-600 to-green-400 h-2 rounded-full" 
+                         style="width: ${barWidth}%"></div>
+                </div>
+                <div class="text-gray-500 mt-1">
+                    ${yearTransactions.length} comenzi • 
+                    Medie: ${avgValue.toFixed(0)} RON
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    
+    return { html };
+}
+
+function makePredictions(customer, transactions) {
+    const predictions = {};
+    const now = new Date('2025-09-20');
+    const lastPurchase = new Date(customer.last_purchase);
+    const daysSinceLast = Math.floor((now - lastPurchase) / (1000 * 60 * 60 * 24));
+    
+    // Predicție următoarea achiziție
+    if (customer.avg_purchase_interval > 0) {
+        const daysUntilNext = customer.avg_purchase_interval - daysSinceLast;
+        
+        if (daysUntilNext < -60) {
+            predictions.risk = `Depășit cu ${Math.abs(daysUntilNext)} zile față de pattern. Risc major de pierdere.`;
+        } else if (daysUntilNext < 0) {
+            predictions.nextPurchase = 'ACUM - Client în fereastră de achiziție';
+            predictions.opportunity = 'Moment optim pentru ofertă personalizată';
+        } else if (daysUntilNext < 30) {
+            predictions.nextPurchase = `În ${daysUntilNext} zile`;
+            predictions.opportunity = 'Pregătiți campanie de reactivare';
+        } else {
+            predictions.nextPurchase = `Peste ${Math.round(daysUntilNext / 30)} luni`;
+        }
+    }
+    
+    // Estimare valoare
+    if (transactions.length >= 5) {
+        const recentTransactions = transactions.slice(-5);
+        const avgRecent = recentTransactions.reduce((sum, t) => sum + t.value, 0) / recentTransactions.length;
+        
+        predictions.estimatedValue = `${(avgRecent * 0.8).toFixed(0)} - ${(avgRecent * 1.2).toFixed(0)} RON`;
+    }
+    
+    // Riscuri speciale
+    if (customer.segment === 'Lost' || customer.segment === 'At Risk') {
+        predictions.risk = predictions.risk || `Segment ${customer.segment} - necesită acțiune urgentă`;
+    }
+    
+    return predictions;
+}
     
 </script>
 </body>
