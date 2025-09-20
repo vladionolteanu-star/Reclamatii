@@ -1114,13 +1114,20 @@ function calculateRefinedTrend(transactions) {
 }
 
 let customerMetrics = Object.values(customerMap).map(c => {
+    // Verificare esențială: dacă un client nu are tranzacții, returnează un obiect gol pentru a evita erori
+    if (c.transactions.length === 0) {
+        return null; 
+    }
+
     const sortedTransactions = c.transactions.sort((a, b) => a.date - b.date);
     const last_purchase = sortedTransactions[sortedTransactions.length - 1].date;
     const first_purchase = sortedTransactions[0].date;
     const daysSinceLastPurchase = Math.floor((now - last_purchase) / (1000 * 60 * 60 * 24));
     const customerLifetime = Math.floor((last_purchase - first_purchase) / (1000 * 60 * 60 * 24)) || 1;
     
-    // Calculăm sezonalitate
+    // --- CALCULELE SUNT ACUM TOATE ÎN INTERIORUL FUNCȚIEI .map() ---
+    
+    // 1. Calculăm sezonalitate
     const seasonality = { 'Iarnă': 0, 'Primăvară': 0, 'Vară': 0, 'Toamnă': 0 };
     c.transactions.forEach(t => {
         const month = t.date.getMonth();
@@ -1131,7 +1138,7 @@ let customerMetrics = Object.values(customerMap).map(c => {
     });
     const preferredSeason = Object.keys(seasonality).reduce((a, b) => seasonality[a] > seasonality[b] ? a : b);
 
-    // Interval mediu de cumpărare
+    // 2. Interval mediu de cumpărare
     let avgPurchaseInterval = 0;
     if (sortedTransactions.length > 1) {
         const intervals = [];
@@ -1139,16 +1146,18 @@ let customerMetrics = Object.values(customerMap).map(c => {
             const diff = (sortedTransactions[i].date - sortedTransactions[i - 1].date) / (1000 * 60 * 60 * 24);
             if (diff > 0) intervals.push(diff);
         }
-        avgPurchaseInterval = Math.round(intervals.reduce((a, b) => a + b, 0) / (intervals.length || 1));
+        if (intervals.length > 0) {
+             avgPurchaseInterval = Math.round(intervals.reduce((a, b) => a + b, 0) / intervals.length);
+        }
     }
     
-    // Folosim noul calcul de trend
+    // 3. Folosim noul calcul de trend
     const trendAnalysis = calculateRefinedTrend(c.transactions);
     
     c.purchase_cycles = Math.round(c.purchase_cycles);
     if (c.purchase_cycles < 1) c.purchase_cycles = 1;
     
-    // Determinăm tipul de client bazat pe comportament
+    // 4. Determinăm tipul de client bazat pe comportament
     let customerType = 'Standard';
     if (c.large_purchases >= 2) customerType = 'Premium';
     else if (c.large_purchases >= 1) customerType = 'Valuable';
@@ -1159,6 +1168,7 @@ let customerMetrics = Object.values(customerMap).map(c => {
         c.email.toLowerCase() !== 'null' && 
         c.email.includes('@');
     
+    // Returnăm obiectul final cu toate datele calculate corect
     return {
         id: c.id, 
         email: c.email, 
@@ -1180,86 +1190,10 @@ let customerMetrics = Object.values(customerMap).map(c => {
         trend_confidence: trendAnalysis.confidence,
         preferred_season: preferredSeason,
         avg_purchase_interval: avgPurchaseInterval,
-        monthly_purchases: c.monthly_purchases // Păstrăm pentru pie chart
+        monthly_purchases: c.monthly_purchases
     };
-});
-        // STAGE 2: Process metrics for RFM and advanced scoring
-        self.postMessage({ type: 'progress', text: 'Calculare metrici Home & Deco...', details: '', percent: 40 });
-        let customerMetrics = Object.values(customerMap).map(c => {
-            const sortedTransactions = c.transactions.sort((a, b) => a.date - b.date); // Sortare crescătoare pentru intervale
-            const last_purchase = sortedTransactions[sortedTransactions.length - 1].date;
-            const first_purchase = sortedTransactions[0].date;
-            const daysSinceLastPurchase = Math.floor((now - last_purchase) / (1000 * 60 * 60 * 24));
-            const customerLifetime = Math.floor((last_purchase - first_purchase) / (1000 * 60 * 60 * 24)) || 1;
-            
-            // --- CALCULE NOI ---
-            // 1. Sezonalitate
-            const seasonality = { 'Iarnă': 0, 'Primăvară': 0, 'Vară': 0, 'Toamnă': 0 };
-            c.transactions.forEach(t => {
-                const month = t.date.getMonth();
-                if ([11, 0, 1].includes(month)) seasonality['Iarnă']++;
-                else if ([2, 3, 4].includes(month)) seasonality['Primăvară']++;
-                else if ([5, 6, 7].includes(month)) seasonality['Vară']++;
-                else seasonality['Toamnă']++;
-            });
-            const preferredSeason = Object.keys(seasonality).reduce((a, b) => seasonality[a] > seasonality[b] ? a : b);
-
-            // 2. Interval mediu de cumpărare
-            let avgPurchaseInterval = 0;
-            if (sortedTransactions.length > 1) {
-                const intervals = [];
-                for (let i = 1; i < sortedTransactions.length; i++) {
-                    const diff = (sortedTransactions[i].date - sortedTransactions[i - 1].date) / (1000 * 60 * 60 * 24);
-                    if (diff > 0) intervals.push(diff);
-                }
-                avgPurchaseInterval = Math.round(intervals.reduce((a, b) => a + b, 0) / (intervals.length || 1));
-            }
-            // --- FINAL CALCULE NOI ---
-
-            c.purchase_cycles = Math.round(c.purchase_cycles);
-            if (c.purchase_cycles < 1) c.purchase_cycles = 1;
-            
-            const monthKeys = Object.keys(c.monthly_purchases).sort();
-            let freqTrend = 0, valueTrend = 0, monetaryTrend = 0;
-            
-            if (monthKeys.length > 1) {
-                const midPoint = Math.floor(monthKeys.length / 2);
-                const firstHalf = monthKeys.slice(0, midPoint);
-                const secondHalf = monthKeys.slice(midPoint);
-                
-                if (firstHalf.length > 0 && secondHalf.length > 0) {
-                    const avgIntervalFirst = firstHalf.length > 1 ? 30 / firstHalf.length : 30;
-                    const avgIntervalSecond = secondHalf.length > 1 ? 30 / secondHalf.length : 30;
-                    freqTrend = ((avgIntervalFirst - avgIntervalSecond) / avgIntervalFirst) * 100;
-                    const avgFirst = firstHalf.reduce((sum, k) => sum + c.monthly_purchases[k], 0) / firstHalf.length;
-                    const avgSecond = secondHalf.reduce((sum, k) => sum + c.monthly_purchases[k], 0) / secondHalf.length;
-                    valueTrend = ((avgSecond - avgFirst) / Math.max(1, avgFirst)) * 100;
-                    monetaryTrend = (valueTrend * 0.6 + freqTrend * 0.4);
-                }
-            }
-            
-            let customerType = 'Standard';
-            if (c.large_purchases >= 2) customerType = 'Premium';
-            else if (c.large_purchases >= 1) customerType = 'Valuable';
-            else if (c.product_categories.size >= 3) customerType = 'Diverse';
-            
-            const hasValidEmail = c.email && c.email !== 'N/A' && c.email.toLowerCase() !== 'na' && c.email.toLowerCase() !== 'null' && c.email.includes('@');
-            
-            return {
-                id: c.id, email: c.email, has_email: hasValidEmail,
-                recency: daysSinceLastPurchase, frequency: c.unique_days.size,
-                monetary: c.total_value, avg_order_value: c.total_value / c.transactions.length,
-                last_purchase: last_purchase, first_purchase: first_purchase,
-                customer_lifetime: customerLifetime, transactions: c.transactions,
-                purchase_cycles: c.purchase_cycles, invoice_count: c.invoice_count,
-                product_categories: c.product_categories.size, customer_type: customerType,
-                trend_monetary: Math.min(100, Math.max(0, 50 + monetaryTrend)), 
-                // Date noi pentru analiză:
-                preferred_season: preferredSeason,
-                avg_purchase_interval: avgPurchaseInterval
-            };
-        });
-
+}).filter(Boolean); // Adaugă .filter(Boolean) pentru a elimina clienții nuli (fără tranzacții)
+        
         // Continue with RFM scoring...
         self.postMessage({ type: 'progress', text: 'Calculare scoruri RFM...', details: '', percent: 50 });
     `;
