@@ -970,45 +970,219 @@
           totalInvoices += (sale.invoices || 1);
           
           // Calculate purchase cycles based on invoice frequency
-          const invoiceContribution = sale.invoices || 1;
-          customer.purchase_cycles += invoiceContribution * 0.3; // Each invoice contributes to cycles
-          
-          // Categorize purchases
-          if (sale.value >= 6000) {
-            customer.large_purchases++;
-            customer.product_categories.add('mobilier_principal');
-          } else if (sale.value >= 500) {
-            customer.product_categories.add('mobilier_mic');
-          } else {
-            customer.product_categories.add('decoratiuni');
-          }
-          
-          // Track monthly for seasonality
-          const monthKey = saleDate.getFullYear() + '-' + (saleDate.getMonth() + 1);
-          customer.monthly_purchases[monthKey] = (customer.monthly_purchases[monthKey] || 0) + sale.value;
+const invoiceContribution = sale.invoices || 1;
+customer.purchase_cycles += invoiceContribution * 0.3;
 
-          // Handle email
-          const emailStr = String(sale.email || '').trim();
-          if (emailStr &&
-              emailStr.toLowerCase() !== 'n/a' &&
-              emailStr.toLowerCase() !== 'na' &&
-              emailStr.toLowerCase() !== 'null' &&
-              emailStr !== '#N/A' &&
-              emailStr !== '#null') {
-            customer.email = emailStr;
-          }
+// Categorize purchases - SIMPLIFICAT pentru Home & Deco
+if (sale.value >= 6000) {
+    customer.large_purchases++;
+    customer.product_categories.add('mobilier_principal');
+} else if (sale.value >= 500) {
+    customer.product_categories.add('mobilier_mic');
+} else {
+    customer.product_categories.add('decoratiuni');
+}
 
-          if (i % 10000 === 0) {
-              const progress = Math.floor((i / salesData.length) * 30);
-              self.postMessage({ 
-                type: 'progress', 
-                text: 'Agregare tranzacții...', 
-                details: \`\${i.toLocaleString('ro-RO')} / \${salesData.length.toLocaleString('ro-RO')}\`, 
-                percent: 10 + progress 
-              });
-          }
+// Track monthly for seasonality
+const monthKey = saleDate.getFullYear() + '-' + (saleDate.getMonth() + 1);
+customer.monthly_purchases[monthKey] = (customer.monthly_purchases[monthKey] || 0) + sale.value;
+
+// Handle email
+const emailStr = String(sale.email || '').trim();
+if (emailStr &&
+    emailStr.toLowerCase() !== 'n/a' &&
+    emailStr.toLowerCase() !== 'na' &&
+    emailStr.toLowerCase() !== 'null' &&
+    emailStr !== '#N/A' &&
+    emailStr !== '#null') {
+    customer.email = emailStr;
+}
+
+if (i % 10000 === 0) {
+    const progress = Math.floor((i / salesData.length) * 30);
+    self.postMessage({ 
+        type: 'progress', 
+        text: 'Agregare tranzacții...', 
+        details: \`\${i.toLocaleString('ro-RO')} / \${salesData.length.toLocaleString('ro-RO')}\`, 
+        percent: 10 + progress 
+    });
+}
+}
+
+// STAGE 2: Process metrics for RFM and advanced scoring
+self.postMessage({ type: 'progress', text: 'Calculare metrici Home & Deco...', details: '', percent: 40 });
+
+// Funcție nouă pentru calcul trend RAFINAT
+function calculateRefinedTrend(transactions) {
+    // Trend se calculează DOAR pentru clienți cu istoric solid
+    if (transactions.length < 10) {
+        return {
+            trend: 50, // Valoare neutră pentru clienți fără istoric suficient
+            confidence: 'low',
+            pattern: 'insufficient_data'
+        };
+    }
+    
+    // Sortăm tranzacțiile cronologic
+    const sorted = [...transactions].sort((a, b) => a.date - b.date);
+    
+    // Împărțim în 3 perioade egale pentru analiză mai granulară
+    const third = Math.floor(sorted.length / 3);
+    const period1 = sorted.slice(0, third);
+    const period2 = sorted.slice(third, third * 2);
+    const period3 = sorted.slice(third * 2);
+    
+    // Calculăm metrici pentru fiecare perioadă
+    const getMetrics = (period) => {
+        const values = period.map(t => t.value);
+        const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
+        const maxValue = Math.max(...values);
+        const minValue = Math.min(...values);
+        
+        // Calculăm intervalul mediu între achiziții
+        let avgInterval = 0;
+        if (period.length > 1) {
+            const intervals = [];
+            for (let i = 1; i < period.length; i++) {
+                const days = (period[i].date - period[i-1].date) / (1000 * 60 * 60 * 24);
+                if (days > 0) intervals.push(days);
+            }
+            avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
         }
+        
+        return {
+            avgValue,
+            maxValue,
+            minValue,
+            count: period.length,
+            avgInterval,
+            variance: values.reduce((sum, v) => sum + Math.pow(v - avgValue, 2), 0) / values.length
+        };
+    };
+    
+    const metrics1 = getMetrics(period1);
+    const metrics2 = getMetrics(period2);
+    const metrics3 = getMetrics(period3);
+    
+    // Calculăm trend-uri multiple
+    const valueTrend = ((metrics3.avgValue - metrics1.avgValue) / metrics1.avgValue) * 100;
+    const frequencyTrend = metrics3.avgInterval > 0 ? 
+        ((metrics1.avgInterval - metrics3.avgInterval) / metrics1.avgInterval) * 100 : 0;
+    const maxValueTrend = ((metrics3.maxValue - metrics1.maxValue) / metrics1.maxValue) * 100;
+    
+    // Detectăm pattern-uri
+    let pattern = 'stable';
+    if (valueTrend > 30 && frequencyTrend > 20) {
+        pattern = 'ascending_strong';
+    } else if (valueTrend > 15 || frequencyTrend > 10) {
+        pattern = 'ascending_moderate';
+    } else if (valueTrend < -30 && frequencyTrend < -20) {
+        pattern = 'declining_strong';
+    } else if (valueTrend < -15 || frequencyTrend < -10) {
+        pattern = 'declining_moderate';
+    } else if (metrics3.variance > metrics1.variance * 2) {
+        pattern = 'volatile';
+    }
+    
+    // Calculăm scorul final de trend (0-100)
+    let trendScore = 50; // Start neutru
+    
+    // Adăugăm/scădem bazat pe tendințe
+    trendScore += Math.min(25, Math.max(-25, valueTrend / 4));
+    trendScore += Math.min(15, Math.max(-15, frequencyTrend / 6));
+    trendScore += Math.min(10, Math.max(-10, maxValueTrend / 10));
+    
+    // Ajustăm pentru volatilitate
+    const volatilityRatio = metrics3.variance / (metrics1.variance || 1);
+    if (volatilityRatio > 3) {
+        trendScore *= 0.8; // Penalizare pentru instabilitate
+    }
+    
+    // Limitare între 0 și 100
+    trendScore = Math.max(0, Math.min(100, trendScore));
+    
+    return {
+        trend: Math.round(trendScore),
+        confidence: transactions.length >= 20 ? 'high' : 'medium',
+        pattern: pattern,
+        metrics: {
+            valueTrend: valueTrend.toFixed(1),
+            frequencyTrend: frequencyTrend.toFixed(1),
+            periods: [metrics1, metrics2, metrics3]
+        }
+    };
+}
 
+let customerMetrics = Object.values(customerMap).map(c => {
+    const sortedTransactions = c.transactions.sort((a, b) => a.date - b.date);
+    const last_purchase = sortedTransactions[sortedTransactions.length - 1].date;
+    const first_purchase = sortedTransactions[0].date;
+    const daysSinceLastPurchase = Math.floor((now - last_purchase) / (1000 * 60 * 60 * 24));
+    const customerLifetime = Math.floor((last_purchase - first_purchase) / (1000 * 60 * 60 * 24)) || 1;
+    
+    // Calculăm sezonalitate
+    const seasonality = { 'Iarnă': 0, 'Primăvară': 0, 'Vară': 0, 'Toamnă': 0 };
+    c.transactions.forEach(t => {
+        const month = t.date.getMonth();
+        if ([11, 0, 1].includes(month)) seasonality['Iarnă']++;
+        else if ([2, 3, 4].includes(month)) seasonality['Primăvară']++;
+        else if ([5, 6, 7].includes(month)) seasonality['Vară']++;
+        else seasonality['Toamnă']++;
+    });
+    const preferredSeason = Object.keys(seasonality).reduce((a, b) => seasonality[a] > seasonality[b] ? a : b);
+
+    // Interval mediu de cumpărare
+    let avgPurchaseInterval = 0;
+    if (sortedTransactions.length > 1) {
+        const intervals = [];
+        for (let i = 1; i < sortedTransactions.length; i++) {
+            const diff = (sortedTransactions[i].date - sortedTransactions[i - 1].date) / (1000 * 60 * 60 * 24);
+            if (diff > 0) intervals.push(diff);
+        }
+        avgPurchaseInterval = Math.round(intervals.reduce((a, b) => a + b, 0) / (intervals.length || 1));
+    }
+    
+    // Folosim noul calcul de trend
+    const trendAnalysis = calculateRefinedTrend(c.transactions);
+    
+    c.purchase_cycles = Math.round(c.purchase_cycles);
+    if (c.purchase_cycles < 1) c.purchase_cycles = 1;
+    
+    // Determinăm tipul de client bazat pe comportament
+    let customerType = 'Standard';
+    if (c.large_purchases >= 2) customerType = 'Premium';
+    else if (c.large_purchases >= 1) customerType = 'Valuable';
+    else if (c.product_categories.size >= 3) customerType = 'Diverse';
+    
+    const hasValidEmail = c.email && c.email !== 'N/A' && 
+        c.email.toLowerCase() !== 'na' && 
+        c.email.toLowerCase() !== 'null' && 
+        c.email.includes('@');
+    
+    return {
+        id: c.id, 
+        email: c.email, 
+        has_email: hasValidEmail,
+        recency: daysSinceLastPurchase, 
+        frequency: c.unique_days.size,
+        monetary: c.total_value, 
+        avg_order_value: c.total_value / c.transactions.length,
+        last_purchase: last_purchase, 
+        first_purchase: first_purchase,
+        customer_lifetime: customerLifetime, 
+        transactions: c.transactions,
+        purchase_cycles: c.purchase_cycles, 
+        invoice_count: c.invoice_count,
+        product_categories: c.product_categories.size, 
+        customer_type: customerType,
+        trend_monetary: trendAnalysis.trend,
+        trend_pattern: trendAnalysis.pattern,
+        trend_confidence: trendAnalysis.confidence,
+        preferred_season: preferredSeason,
+        avg_purchase_interval: avgPurchaseInterval,
+        monthly_purchases: c.monthly_purchases // Păstrăm pentru pie chart
+    };
+});
         // STAGE 2: Process metrics for RFM and advanced scoring
         self.postMessage({ type: 'progress', text: 'Calculare metrici Home & Deco...', details: '', percent: 40 });
         let customerMetrics = Object.values(customerMap).map(c => {
