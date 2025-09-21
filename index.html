@@ -1741,28 +1741,31 @@ function getFilteredData() {
         filtered = filtered.filter(c => c.has_complaint === true);
     }
 
-    // --- AICI ESTE LOGICA NOUĂ ADAUGATĂ ---
+    // LOGICĂ NOUĂ PENTRU MOBEXPERT
     const readyForPurchase = document.getElementById('filterReadyPurchase').checked;
     const overduePurchase = document.getElementById('filterOverduePurchase').checked;
 
     if (readyForPurchase) {
         filtered = filtered.filter(c => {
-            // Un client e "gata de achizitie" daca intervalul mediu exista (nu e 0)
-            // si se afla in "fereastra de cumparare" (ex: cu 14 zile inainte de a se implini intervalul mediu).
-            return c.avg_purchase_interval > 0 && 
-                   c.recency >= (c.avg_purchase_interval - 14) && 
-                   c.recency < c.avg_purchase_interval;
+            // Client relevant: minim 10 tranzacții, peste 10k RON total, interval mediu calculabil
+            if (c.invoice_count < 10 || c.monetary < 10000 || c.avg_purchase_interval <= 0) return false;
+            
+            // Fereastra de achiziție: între interval-60 zile și interval+60 zile
+            const minDays = c.avg_purchase_interval - 60;
+            const maxDays = c.avg_purchase_interval + 60;
+            return c.recency >= minDays && c.recency <= maxDays;
         });
     }
 
     if (overduePurchase) {
         filtered = filtered.filter(c => {
-            // Un client a "depasit perioada" daca intervalul mediu exista (nu e 0)
-            // si au trecut mai multe zile de la ultima achizitie decat intervalul mediu.
-            return c.avg_purchase_interval > 0 && c.recency > c.avg_purchase_interval;
+            // Client relevant: minim 10 tranzacții, peste 10k RON total, interval mediu calculabil
+            if (c.invoice_count < 10 || c.monetary < 10000 || c.avg_purchase_interval <= 0) return false;
+            
+            // Perioadă depășită: peste interval+90 zile, dar sub 730 zile (2 ani)
+            return c.recency > (c.avg_purchase_interval + 90) && c.recency < 730;
         });
     }
-    // --- FINAL LOGICĂ NOUĂ ---
 
     // Search filter
     const search = document.getElementById('searchInput').value.toLowerCase();
