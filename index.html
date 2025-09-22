@@ -561,6 +561,53 @@
   border: 1px solid rgba(147, 51, 234, 0.2);
   color: #9333ea;
 }
+    /* Stiluri pentru ML Enhanced */
+.ml-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(15px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.ml-popup {
+  background: linear-gradient(145deg, #101010, #0A0A0A);
+  border: 1px solid rgba(147, 51, 234, 0.2);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 800px;
+  width: 95%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 80px rgba(147, 51, 234, 0.15);
+  animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.ml-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ml-high { background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; }
+.ml-medium { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; }
+.ml-low { background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; }
   </style>
 </head>
 </head>
@@ -1727,23 +1774,30 @@ document.getElementById('filterOverduePurchase').addEventListener('change', rend
                 skipEmptyLines: true,
                 complete: function(results) {
                     const data = results.data.map(row => {
-                        if (type === 'sales') {
-                            return {
-                                id: row['ID CLIENT'] || row['ID_CLIENT'] || row['Customer ID'] || '',
-                                email: row['EMAIL CLIENT'] || row['EMAIL_CLIENT'] || row['Email'] || 'N/A',
-                                date: row['DATA'] || row['Date'] || '',
-                                value: parseFloat(row['VALOARE FACTURATA'] || row['VALOARE_FACTURATA'] || row['Value'] || 0) || 0,
-                                invoices: parseInt(row['NR FACTURI'] || row['NR_FACTURI'] || row['Invoices'] || 1) || 1,
-                                store: row['MAGAZIN'] || row['Store'] || 'Unknown'
-                            };
-                        } else {
-                            return {
-                                id: row['ID CLIENT'] || row['ID_CLIENT'] || row['Customer ID'] || '',
-                                date: row['DATA RECLAMATIE'] || row['DATA_RECLAMATIE'] || row['Complaint Date'] || '',
-                                quantity: parseFloat(row['Cantitate Reclamata'] || row['Quantity'] || 0) || 0,
-                                value: parseFloat(row['Valoare Articole Reclamate'] || row['Value'] || 0) || 0
-                            };
-                        }
+                       if (type === 'sales') {
+    // Caută în coloanele posibile pentru numele produsului
+    const extractProductName = (row) => {
+        const possibleColumns = [
+            'DENUMIRE ARTICOL', 'DENUMIRE_ARTICOL', 'Product Name', 
+            'Product', 'Articol', 'Produs'
+        ];
+        for (const col of possibleColumns) {
+            if (row[col]) return row[col];
+        }
+        return 'Unknown';
+    };
+
+    return {
+        id: row['ID CLIENT'] || row['ID_CLIENT'] || row['Customer ID'] || '',
+        email: row['EMAIL CLIENT'] || row['EMAIL_CLIENT'] || row['Email'] || 'N/A',
+        date: row['DATA'] || row['Date'] || '',
+        value: parseFloat(row['VALOARE FACTURATA'] || row['VALOARE_FACTURATA'] || row['Value'] || 0) || 0,
+        invoices: parseInt(row['NR FACTURI'] || row['NR_FACTURI'] || row['Invoices'] || 1) || 1,
+        store: row['MAGAZIN'] || row['Store'] || 'Unknown',
+        // ADAUGĂM LINIA ESENȚIALĂ PENTRU NUMELE PRODUSULUI
+        product_name: extractProductName(row) 
+    };
+}
                     }).filter(row => row.id && row.id !== '' && row.id !== 'null');
                     resolve(data);
                 },
@@ -2369,551 +2423,2039 @@ function generateClientStory(customerId) {
     showStoryModal(storyHtml);
 }
   // ============================================
-// MODUL ML PENTRU PREDICȚII - MOBEXPERT CRM
+// MOBEXPERT ML ENHANCED - LSTM & CLUSTERING
+
 // ============================================
 
-class MobexpertMLPredictor {
-  constructor() {
-    this.model = null;
-    this.categoryModel = null;
-    this.seasonalityPatterns = {};
-    this.categoryDictionary = this.buildCategoryDictionary();
-    this.initialized = false;
-  }
-
-  // Dicționar categorii Home & Deco
-  buildCategoryDictionary() {
-    return {
-      // Mobilier principal
-      'canapele': { avg_price: 8500, cycle_months: 84, category: 'mobilier_principal' },
-      'paturi': { avg_price: 6500, cycle_months: 96, category: 'mobilier_principal' },
-      'dulapuri': { avg_price: 7000, cycle_months: 120, category: 'mobilier_principal' },
-      'mese': { avg_price: 4500, cycle_months: 72, category: 'mobilier_principal' },
-
-      // Mobilier mic
-      'scaune': { avg_price: 1200, cycle_months: 48, category: 'mobilier_mic' },
-      'noptiere': { avg_price: 800, cycle_months: 60, category: 'mobilier_mic' },
-      'comode': { avg_price: 2500, cycle_months: 72, category: 'mobilier_mic' },
-      'biblioteci': { avg_price: 3500, cycle_months: 96, category: 'mobilier_mic' },
-
-      // Textile
-      'perne': { avg_price: 150, cycle_months: 12, category: 'textile' },
-      'cuverturi': { avg_price: 450, cycle_months: 24, category: 'textile' },
-      'draperii': { avg_price: 650, cycle_months: 36, category: 'textile' },
-      'covoare': { avg_price: 850, cycle_months: 48, category: 'textile' },
-
-      // Decorațiuni
-      'tablouri': { avg_price: 350, cycle_months: 0, category: 'decoratiuni' },
-      'vaze': { avg_price: 180, cycle_months: 0, category: 'decoratiuni' },
-      'oglinzi': { avg_price: 420, cycle_months: 0, category: 'decoratiuni' },
-      'lumini': { avg_price: 380, cycle_months: 36, category: 'iluminat' }
-    };
-  }
-
-  // Detectează sezonalitate din date istorice
-  detectSeasonality(transactions) {
-    const monthlySpend = {};
-
-    transactions.forEach(t => {
-      const date = new Date(t.date);
-      const month = date.getMonth();
-      monthlySpend[month] = (monthlySpend[month] || 0) + t.value;
-    });
-
-    // Normalizare
-    const total = Object.values(monthlySpend).reduce((a, b) => a + b, 0);
-    const patterns = {};
-
-    for (let month in monthlySpend) {
-      patterns[month] = (monthlySpend[month] / total) * 100;
-    }
-
-    return patterns;
-  }
-
-  // Extrage features pentru model
-  extractFeatures(customer) {
-    const now = new Date('2025-09-22');
-
-    // Features principale
-    const features = {
-      // Temporale
-      recency_days: customer.recency,
-      recency_normalized: Math.min(1, customer.recency / 730), // Max 2 ani
-      lifetime_days: customer.customer_lifetime,
-      avg_interval: customer.avg_purchase_interval || 180,
-
-      // Valoare
-      total_value: customer.monetary,
-      avg_order_value: customer.avg_order_value,
-      value_per_year: customer.monetary / Math.max(1, customer.customer_lifetime / 365),
-
-      // Frecvență
-      invoice_count: customer.invoice_count,
-      frequency_score: Math.min(1, customer.invoice_count / 20),
-
-      // Comportament
-      has_large_purchases: customer.transactions.filter(t => t.value >= 6000).length,
-      has_small_purchases: customer.transactions.filter(t => t.value < 500).length,
-      product_diversity: customer.product_categories || 1,
-
-      // Trend (dacă există)
-      trend_score: customer.trend_monetary || 50,
-      is_declining: customer.trend_monetary < 40 ? 1 : 0,
-      is_growing: customer.trend_monetary > 60 ? 1 : 0,
-
-      // Sezonalitate
-      current_month: now.getMonth(),
-      preferred_season_match: this.getSeasonMatch(customer.preferred_season, now.getMonth()),
-
-      // Reclamații
-      has_complaint: customer.has_complaint ? 1 : 0,
-      lost_after_complaint: customer.no_orders_after_complaint ? 1 : 0
-    };
-
-    return features;
-  }
-
-  // Calculează match sezonalitate
-  getSeasonMatch(preferredSeason, currentMonth) {
-    const seasonMonths = {
-      'Iarnă': [11, 0, 1],
-      'Primăvară': [2, 3, 4],
-      'Vară': [5, 6, 7],
-      'Toamnă': [8, 9, 10]
-    };
-
-    const currentSeason = Object.keys(seasonMonths).find(season =>
-      seasonMonths[season].includes(currentMonth)
-    );
-
-    return preferredSeason === currentSeason ? 1 : 0;
-  }
-
-  // Predicție probabilitate cumpărare (Random Forest simplificat)
-  predictPurchaseProbability(customer) {
-    const features = this.extractFeatures(customer);
-
-    // Model simplificat bazat pe reguli (Random Forest ar fi prea complex pentru browser)
-    let probability = 50; // Start de la 50%
-
-    // Ajustări bazate pe recency
-    if (features.recency_days < 90) {
-      probability += 20;
-    } else if (features.recency_days < 180) {
-      probability += 10;
-    } else if (features.recency_days < 365) {
-      probability -= 10;
-    } else if (features.recency_days < 730) {
-      probability -= 25;
-    } else {
-      probability -= 40;
-    }
-
-    // Ajustări bazate pe frecvență și valoare
-    if (features.invoice_count >= 10) {
-      probability += 15;
-    }
-
-    if (features.avg_order_value > 5000) {
-      probability += 10;
-    }
-
-    // Ajustări pentru trend
-    if (features.is_growing) {
-      probability += 15;
-    } else if (features.is_declining) {
-      probability -= 20;
-    }
-
-    // Ajustări pentru intervalul de cumpărare
-    if (features.avg_interval > 0) {
-      const daysOverdue = features.recency_days - features.avg_interval;
-      if (daysOverdue > -30 && daysOverdue < 30) {
-        probability += 25; // În fereastră optimă
-      } else if (daysOverdue > 60) {
-        probability -= 15; // Întârziat mult
-      }
-    }
-
-    // Penalizare pentru reclamații
-    if (features.lost_after_complaint) {
-      probability -= 30;
-    } else if (features.has_complaint) {
-      probability -= 10;
-    }
-
-    // Match sezonier
-    if (features.preferred_season_match) {
-      probability += 5;
-    }
-
-    // Limitare între 0 și 100
-    probability = Math.max(5, Math.min(95, probability));
-
-    return {
-      probability: Math.round(probability),
-      confidence: this.calculateConfidence(features),
-      factors: this.explainPrediction(features, probability)
-    };
-  }
-
-  // Calculează nivelul de încredere
-  calculateConfidence(features) {
-    let confidence = 'low';
-
-    if (features.invoice_count >= 10 && features.lifetime_days > 365) {
-      confidence = 'high';
-    } else if (features.invoice_count >= 5 && features.lifetime_days > 180) {
-      confidence = 'medium';
-    }
-
-    return confidence;
-  }
-
-  // Explică predicția
-  explainPrediction(features, probability) {
-    const factors = [];
-
-    if (features.recency_days < 180) {
-      factors.push('+ Client activ recent');
-    } else if (features.recency_days > 730) {
-      factors.push('- Inactiv de peste 2 ani');
-    }
-
-    if (features.invoice_count >= 10) {
-      factors.push('+ Istoric solid de achiziții');
-    }
-
-    if (features.is_growing) {
-      factors.push('+ Trend crescător');
-    } else if (features.is_declining) {
-      factors.push('- Trend descrescător');
-    }
-
-    if (features.lost_after_complaint) {
-      factors.push('- Pierdut după reclamație');
-    }
-
-    return factors;
-  }
-
-  // Predicție timing (luna probabilă)
-  predictPurchaseTiming(customer) {
-    const features = this.extractFeatures(customer);
-    const seasonality = this.detectSeasonality(customer.transactions);
-
-    // Găsește lunile cu activitate maximă
-    const topMonths = Object.entries(seasonality)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3);
-
-    // Calculează următoarea lună probabilă
-    const currentMonth = new Date('2025-09-22').getMonth();
-    let nextProbableMonth = currentMonth;
-
-    if (features.avg_interval > 0) {
-      const monthsToAdd = Math.round(features.avg_interval / 30);
-      const lastPurchaseMonth = new Date(customer.last_purchase).getMonth();
-      nextProbableMonth = (lastPurchaseMonth + monthsToAdd) % 12;
-    }
-
-    // Ajustare cu sezonalitate
-    if (seasonality[nextProbableMonth] < 5) { // Dacă luna prezisă are activitate slabă
-      // Alege cea mai apropiată lună cu activitate mare
-      nextProbableMonth = parseInt(topMonths[0][0]);
-    }
-
-    const monthNames = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie',
-                        'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'];
-
-    return {
-      month: monthNames[nextProbableMonth],
-      monthIndex: nextProbableMonth,
-      seasonalityScore: seasonality[nextProbableMonth] || 0,
-      topSeasons: topMonths.map(m => ({
-        month: monthNames[m[0]],
-        score: Math.round(m[1])
-      }))
-    };
-  }
-
-  // Predicție categorii probabile
-  predictCategories(customer) {
-    const purchaseHistory = {};
-
-    // Analizează istoricul
-    customer.transactions.forEach(t => {
-      if (t.value >= 6000) {
-        purchaseHistory['mobilier_principal'] = (purchaseHistory['mobilier_principal'] || 0) + 1;
-      } else if (t.value >= 500) {
-        purchaseHistory['mobilier_mic'] = (purchaseHistory['mobilier_mic'] || 0) + 1;
-      } else {
-        purchaseHistory['decoratiuni'] = (purchaseHistory['decoratiuni'] || 0) + 1;
-      }
-    });
-
-    // Calculează probabilități
-    const total = Object.values(purchaseHistory).reduce((a, b) => a + b, 0);
-    const probabilities = {};
-
-    for (let cat in purchaseHistory) {
-      probabilities[cat] = (purchaseHistory[cat] / total) * 100;
-    }
-
-    // Identifică cicluri de înlocuire
-    const recommendations = [];
-    const lastPurchaseDate = new Date(customer.last_purchase);
-    const monthsSinceLastPurchase = customer.recency / 30;
-
-    // Verifică pentru fiecare categorie
-    if (purchaseHistory['mobilier_principal'] > 0) {
-      if (monthsSinceLastPurchase > 60) { // 5+ ani
-        recommendations.push({
-          category: 'Mobilier Principal',
-          reason: 'Ciclu de înlocuire (5-7 ani)',
-          items: ['Canapea', 'Pat', 'Dulap'],
-          estimatedValue: '6000-12000 RON'
-        });
-      }
-    }
-
-    if (purchaseHistory['mobilier_mic'] > 0) {
-      if (monthsSinceLastPurchase > 36) { // 3+ ani
-        recommendations.push({
-          category: 'Mobilier Mic',
-          reason: 'Reîmprospătare decor',
-          items: ['Scaune', 'Noptiere', 'Comode'],
-          estimatedValue: '1500-3500 RON'
-        });
-      }
-    }
-
-    // Decorațiuni sezoniere
-    const currentMonth = new Date('2025-09-22').getMonth();
-    if ([10, 11, 0].includes(currentMonth)) { // Noiembrie-Ianuarie
-      recommendations.push({
-        category: 'Decorațiuni Sezoniere',
-        reason: 'Sezon sărbători',
-        items: ['Decorațiuni Crăciun', 'Iluminat festiv'],
-        estimatedValue: '300-800 RON'
-      });
-    }
-
-    return {
-      probabilities: probabilities,
-      recommendations: recommendations,
-      preferredCategory: Object.keys(probabilities).reduce((a, b) => 
-        probabilities[a] > probabilities[b] ? a : b
-      )
-    };
-  }
-
-  // Predicție valoare comandă
-  predictOrderValue(customer) {
-    const avgValue = customer.avg_order_value;
-    const trend = customer.trend_monetary || 50;
-
-    // Ajustare bazată pe trend
-    let predictedValue = avgValue;
-
-    if (trend > 60) {
-      predictedValue *= 1.15; // Creștere 15%
-    } else if (trend < 40) {
-      predictedValue *= 0.85; // Scădere 15%
-    }
-
-    // Ajustare bazată pe categorie prezisă
-    const categories = this.predictCategories(customer);
-
-    if (categories.preferredCategory === 'mobilier_principal') {
-      predictedValue = Math.max(predictedValue, 6000);
-    }
-
-    return {
-      value: Math.round(predictedValue),
-      range: {
-        min: Math.round(predictedValue * 0.7),
-        max: Math.round(predictedValue * 1.3)
-      },
-      confidence: avgValue > 0 ? 'medium' : 'low'
-    };
-  }
-
-  // Generează predicții complete pentru un client
-  generatePredictions(customer) {
-    return {
-      customerId: customer.id,
-      purchaseProbability: this.predictPurchaseProbability(customer),
-      timing: this.predictPurchaseTiming(customer),
-      categories: this.predictCategories(customer),
-      orderValue: this.predictOrderValue(customer),
-      generatedAt: new Date().toISOString()
-    };
-  }
+
+
+// Worker Code pentru procesare ML avansată
+
+const MLWorkerCode = `
+
+  importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js');
+
+
+
+  // Configurație globală
+
+  const CONFIG = {
+
+    CLUSTERS: 30,
+
+    SEQUENCE_LENGTH: 24, // ultimele 24 luni pentru LSTM
+
+    BATCH_SIZE: 5000,
+
+    LSTM_UNITS: 64,
+
+    EMBEDDING_DIM: 32,
+
+    SEASONALITY_FEATURES: 12, // features pentru fiecare lună
+
+    CACHE_SIZE: 10000
+
+  };
+
+
+
+  // Cache pentru predicții
+
+  const predictionCache = new Map();
+
+
+
+  // 1. CLUSTERING PENTRU CATEGORII PRODUSE
+
+  class ProductCategorizer {
+
+    constructor() {
+
+      this.categoryPatterns = this.initializePatterns();
+
+      this.clusters = new Map();
+
+      this.embeddings = new Map();
+
+    }
+
+
+
+ // Înlocuiește funcția initializePatterns() din ProductCategorizer
+
+initializePatterns() {
+
+  return {
+
+    // DORMITOR
+
+    'dormitor_mobilier': ['dormitor', 'mobila dormitor', 'mobilier dormitor', 'set dormitor'],
+
+    'dormitor_apartament': ['apartament', 'garsoniera', 'studio', 'dormitor mic'],
+
+    'paturi': ['pat', 'paturi', 'somiera', 'lada pat', 'pat tapitat', 'pat matrimonial', 'pat single'],
+
+    'paturi_tapitate': ['pat tapitat', 'pat textil', 'pat stofa', 'pat catifea', 'pat piele'],
+
+    'dulapuri': ['dulap', 'sifonier', 'garderoba', 'dulap haine'],
+
+    'dressing': ['dressing', 'walk-in', 'sistem dressing', 'organizator'],
+
+    'dulapuri_apartament': ['dulap mic', 'dulap 2 usi', 'dulap compact'],
+
+    'noptiere': ['noptiera', 'noptiere', 'masuta noapte'],
+
+    'comode_dormitor': ['comoda', 'comode', 'sertare', 'comoda sertare'],
+
+    'oglinzi_dormitor': ['oglinda', 'oglinda dormitor', 'oglinda mare'],
+
+    'masute_toaleta': ['masuta toaleta', 'masa toaleta', 'vanity', 'toaleta', 'masa machiaj'],
+
+
+
+    // LIVING
+
+    'living_mobilier': ['living', 'mobila living', 'mobilier living', 'set living'],
+
+    'living_apartament': ['living mic', 'living compact', 'living studio'],
+
+    'biblioteci': ['biblioteca', 'etajera', 'raft', 'rafturi', 'bookcase'],
+
+    'vitrine_living': ['vitrina', 'vitrine', 'cristaliera', 'display'],
+
+    'masute_living': ['masuta cafea', 'masuta living', 'coffee table', 'masuta centru'],
+
+    'comode_tv': ['comoda tv', 'mobila tv', 'stand tv', 'suport tv', 'unitate tv'],
+
+    'console': ['consola', 'console', 'masuta consola'],
+
+    'polite': ['polita', 'polite', 'raft perete'],
+
+    'seminee': ['semineu', 'seminee', 'fireplace', 'focar'],
+
+
+
+    // DINING
+
+    'dining_mobilier': ['dining', 'sufragerie', 'mobila dining', 'set dining'],
+
+    'dining_apartament': ['dining mic', 'dining compact'],
+
+    'mese_dining': ['masa dining', 'masa sufragerie', 'masa extensibila', 'masa', 'mese'],
+
+    'scaune_dining': ['scaun', 'scaune', 'scaun dining', 'scaune sufragerie'],
+
+    'scaune_bar': ['scaun bar', 'scaune bar', 'barstool', 'taburet bar'],
+
+    'baruri': ['bar', 'minibar', 'mobila bar', 'bar casa'],
+
+    'bufete': ['bufet', 'bufete', 'sideboard', 'credenza'],
+
+    'vitrine_dining': ['vitrina dining', 'vitrina sufragerie'],
+
+    'masute_mobile': ['masuta mobila', 'cart', 'carucior', 'masuta rotile'],
+
+
+
+    // BUCĂTĂRIE
+
+    'bucatarie_mobilier': ['bucatarie', 'mobila bucatarie', 'mobilier bucatarie'],
+
+    'game_bucatarie': ['gama bucatarie', 'set bucatarie', 'ansamblu bucatarie'],
+
+    'bucatarie_apartament': ['bucatarie mica', 'bucatarie compact', 'kitchenette'],
+
+    'bucatarii_complete': ['bucatarie completa', 'bucatarie echipata'],
+
+    'scaune_bucatarie': ['scaun bucatarie', 'scaune bucatarie'],
+
+    'mese_bucatarie': ['masa bucatarie', 'mese bucatarie', 'dining table'],
+
+
+
+    // HOL
+
+    'hol_mobilier': ['hol', 'mobila hol', 'vestibul', 'antreu', 'mobilier hol'],
+
+    'cuiere': ['cuier', 'cuiere', 'agatator', 'suport haine'],
+
+    'oglinzi_hol': ['oglinda hol', 'oglinda vestibul', 'oglinda antreu'],
+
+    'console_hol': ['consola hol', 'masuta hol'],
+
+    'canapele_hol': ['canapea hol', 'fotoliu hol', 'bancheta hol', 'taburet hol'],
+
+    'comode_pantofi': ['comoda pantofi', 'pantofar', 'suport pantofi', 'dulap pantofi'],
+
+
+
+    // BAIE
+
+    'baie_mobilier': ['baie', 'mobila baie', 'mobilier baie', 'set baie'],
+
+    'lavoare': ['lavoar', 'lavoare', 'chiuveta baie', 'bazin'],
+
+    'mobilier_spalatorie': ['spalatorie', 'mobila spalatorie', 'dulap spalatorie'],
+
+    'cazi': ['cada', 'cada baie', 'bathtub', 'jacuzzi'],
+
+    'baterii': ['baterie', 'baterii', 'robinet', 'mixer'],
+
+    'vase_toaleta': ['vas toaleta', 'wc', 'toaleta', 'bideu'],
+
+    'cabine_dus': ['cabina dus', 'sistem dus', 'shower'],
+
+    'cadite': ['cadita', 'cadita dus', 'tava dus'],
+
+    'radiatoare': ['radiator', 'radiator baie', 'calorifer', 'prosop radiator'],
+
+    'oglinzi_baie': ['oglinda baie', 'oglinda led', 'oglinda iluminata'],
+
+    'accesorii_baie': ['accesorii baie', 'dozator sapun', 'suport prosop'],
+
+
+
+    // BIROU
+
+    'birou_mobilier': ['birou', 'mobila birou', 'mobilier office', 'desk'],
+
+    'birouri_operationale': ['birou operational', 'birou angajat', 'workstation'],
+
+    'birouri_manageriale': ['birou manager', 'birou director', 'executive desk'],
+
+    'birou_acasa': ['birou acasa', 'home office', 'birou personal'],
+
+    'mese_consiliu': ['masa consiliu', 'masa sedinta', 'conference table'],
+
+    'depozitare_birou': ['dulap birou', 'etajera birou', 'filing cabinet', 'sertar birou'],
+
+    'scaune_operationale': ['scaun operational', 'scaun birou', 'office chair'],
+
+    'scaune_manageriale': ['scaun manager', 'scaun director', 'executive chair'],
+
+    'scaune_consiliu': ['scaun consiliu', 'scaun conferinta'],
+
+    'scaune_gaming': ['scaun gaming', 'gaming chair', 'gamer'],
+
+    'scaune_birou_acasa': ['scaun birou acasa', 'scaun home office'],
+
+    'zona_asteptare': ['asteptare', 'waiting', 'lounge', 'receptie'],
+
+    'masute_birou': ['masuta birou', 'side table', 'masuta laptop'],
+
+
+
+    // CANAPELE
+
+    'canapele_toate': ['canapea', 'sofa', 'canapele', 'divan'],
+
+    'canapele_extensibile': ['canapea extensibila', 'sofa bed', 'canapea pat'],
+
+    'coltare': ['coltar', 'coltare', 'sectional', 'canapea coltar'],
+
+    'canapele_apartament': ['canapea mica', 'canapea 2 locuri', 'loveseat'],
+
+    'canapele_stofa': ['canapea stofa', 'canapea textil', 'fabric sofa'],
+
+    'canapele_piele': ['canapea piele', 'leather sofa', 'piele naturala', 'piele eco'],
+
+    'canapele_recliner': ['recliner', 'canapea recliner', 'balansoar', 'rocking chair'],
+
+    'canapele_clic_clac': ['clic clac', 'click clack', 'canapea clic'],
+
+    'fotolii': ['fotoliu', 'fotolii', 'armchair', 'sezlong', 'chaise'],
+
+    'banchete': ['bancheta', 'banchete', 'bench', 'ottoman'],
+
+    'taburete': ['taburet', 'taburete', 'puf', 'pouf', 'stool'],
+
+
+
+    // COVOARE
+
+    'covoare_camera': ['covor', 'covoare', 'mocheta', 'carpet', 'rug'],
+
+    'covoare_ziegler': ['ziegler', 'covor ziegler', 'persian'],
+
+    'covoare_copii': ['covor copii', 'covor camera copii', 'kids rug'],
+
+    'covoare_piele': ['covor piele', 'piele naturala', 'leather rug'],
+
+    'covoare_bucatarie': ['covor bucatarie', 'kitchen rug', 'traversa bucatarie'],
+
+    'covoare_exterior': ['covor exterior', 'outdoor rug', 'terasa'],
+
+    'covoare_intrare': ['pres', 'covor intrare', 'doormat', 'covoras intrare'],
+
+    'covorase_baie': ['covoras baie', 'bathroom rug', 'antiderapant'],
+
+
+
+    // ILUMINAT
+
+    'lustre': ['lustra', 'lustre', 'chandelier', 'candelabru'],
+
+    'pendule': ['pendula', 'pendant', 'pendul', 'hanging lamp'],
+
+    'plafoniere': ['plafoniera', 'ceiling light', 'spot', 'spoturi'],
+
+    'aplice': ['aplica', 'aplice', 'wall light', 'lampa perete'],
+
+    'veioze': ['veioza', 'veioze', 'table lamp', 'lampa masa'],
+
+    'lampadare': ['lampadar', 'floor lamp', 'lampa podea'],
+
+    'iluminat_copii': ['lampa copii', 'veioza copii', 'kids lamp'],
+
+    'lampi_exterior': ['lampa exterior', 'outdoor light', 'felinar'],
+
+    'abajururi': ['abajur', 'shade', 'baza lampa'],
+
+    'lampi_birou': ['lampa birou', 'desk lamp', 'lampa citit'],
+
+    'becuri': ['bec', 'becuri', 'bulb', 'led', 'halogen'],
+
+
+
+    // SERVEȘTE MASA
+
+    'pentru_gatit': ['tigaie', 'oala', 'cratita', 'cookware', 'vas gatit'],
+
+    'pentru_bucatarie': ['recipient', 'cutie', 'borcan', 'ustensile', 'lingura', 'furculita'],
+
+    'vesela': ['farfurie', 'ceasca', 'cana', 'pahar', 'set vesela', 'portelan'],
+
+    'decoratiuni_masa': ['servet', 'fata masa', 'inel servetel', 'runner'],
+
+
+
+    // SOMN ȘI BAIE
+
+    'saltele': ['saltea', 'saltele', 'mattress', 'arcuri', 'memory foam', 'latex'],
+
+    'lenjerii': ['lenjerie pat', 'cearsaf', 'fata perna', 'set lenjerie', 'bedding'],
+
+    'pilote_perne': ['pilota', 'perna', 'plapuma', 'duvet', 'pillow'],
+
+    'protectii': ['protectie saltea', 'topper', 'husa saltea'],
+
+    'halate_prosoape': ['halat', 'prosop', 'bathrobe', 'towel'],
+
+
+
+    // DECORAȚIUNI
+
+    'perne_decorative': ['perna decorativa', 'fata perna', 'cushion', 'throw pillow'],
+
+    'pleduri': ['pled', 'patura', 'cuvertura', 'throw', 'blanket'],
+
+    'asternuturi': ['asternut', 'cuvertura pat', 'husa plapuma', 'bedspread'],
+
+    'tablouri': ['tablou', 'poster', 'rama', 'canvas', 'picture', 'arta', 'art'],
+
+    'oglinzi_decorative': ['oglinda decorativa', 'mirror', 'oglinda design'],
+
+    'ceasuri_perete': ['ceas perete', 'pendula', 'wall clock'],
+
+    'corpuri_decor': ['vaza', 'bol', 'statueta', 'figurina', 'obiect decorativ'],
+
+    'suporturi_rafturi': ['suport', 'raft decorativ', 'shelf', 'etajera decorativa'],
+
+    'vaze_ghivece': ['vaza', 'ghiveci', 'jardiniera', 'planter', 'pot'],
+
+    'suporturi_foto': ['rama foto', 'suport fotografie', 'photo frame'],
+
+    'decoratiuni_sezon': ['craciun', 'paste', 'halloween', 'brad', 'globuri', 'ornament'],
+
+
+
+    // EXTERIOR
+
+    'mobilier_exterior': ['exterior', 'gradina', 'terasa', 'outdoor', 'garden'],
+
+    'seturi_exterior': ['set gradina', 'set terasa', 'patio set'],
+
+    'canapele_exterior': ['canapea exterior', 'fotoliu exterior', 'outdoor sofa'],
+
+    'sezlonguri': ['sezlong', 'lounger', 'deck chair', 'plaja'],
+
+    'masute_exterior': ['masuta exterior', 'outdoor table'],
+
+    'mese_scaune_exterior': ['masa gradina', 'scaun gradina', 'garden chair'],
+
+    'leagane': ['leagan', 'balansoar', 'swing', 'hammock'],
+
+    'decoratiuni_exterior': ['decor gradina', 'solar', 'fantana'],
+
+    'plante_ghivece': ['planta', 'ghiveci', 'flori', 'jardiniera']
+
+  };
+
 }
 
-// ============================================
-// FUNCȚII DE INTEGRARE CU CRM-UL EXISTENT
-// ============================================
 
-// Instanță globală
-window.mlPredictor = new MobexpertMLPredictor();
 
-// Funcție pentru a genera predicții pentru top N clienți
-function generateTopPredictions(customersData, topN = 100) {
-  // Filtrează clienții relevanți (nu Lost, cu istoric solid)
-  const relevantCustomers = customersData
-    .filter(c => 
-      c.segment !== 'Lost' && 
-      c.invoice_count >= 5 && 
-      c.monetary > 5000
-    )
-    .slice(0, topN);
+    extractFeatures(text) {
 
-  const predictions = relevantCustomers.map(customer => 
-    window.mlPredictor.generatePredictions(customer)
-  );
+      if (!text) return [];
 
-  return predictions;
-}
+      const normalized = text.toLowerCase()
 
-// Funcție pentru a afișa dashboard-ul de predicții
-function renderPredictionsDashboard(predictions) {
-  const dashboardHTML = `
-    <div class="ml-dashboard">
-      <h2 style="color: #9333ea; font-size: 1.5rem; margin-bottom: 20px;">
-        🤖 Predicții ML - Top Clienți cu Potențial
-      </h2>
+        .replace(/[^a-z0-9ăâîșț ]/g, ' ')
 
-      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
-        ${predictions.slice(0, 20).map(pred => `
-          <div class="prediction-card">
-            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
-              <div>
-                <div style="color: #666; font-size: 11px;">CLIENT ID</div>
-                <div style="color: #fff; font-weight: bold;">${pred.customerId}</div>
-              </div>
-              <div class="prediction-score">${pred.purchaseProbability.probability}%</div>
-            </div>
+        .replace(/\\s+/g, ' ')
 
-            <div style="border-top: 1px solid #333; padding-top: 12px; margin-top: 12px;">
-              <div style="margin-bottom: 8px;">
-                <span style="color: #9333ea; font-size: 12px;">📅 Timing:</span>
-                <span style="color: #fff; font-size: 12px; margin-left: 8px;">
-                  ${pred.timing.month}
-                </span>
-              </div>
+        .trim();
 
-              <div style="margin-bottom: 8px;">
-                <span style="color: #9333ea; font-size: 12px;">🛍️ Categorii probabile:</span>
-                <div style="margin-top: 4px;">
-                  ${pred.categories.recommendations.slice(0, 2).map(rec => 
-                    `<span class="category-chip">${rec.category}</span>`
-                  ).join('')}
-                </div>
-              </div>
+      
 
-              <div style="margin-bottom: 8px;">
-                <span style="color: #9333ea; font-size: 12px;">💰 Valoare estimată:</span>
-                <span style="color: #22c55e; font-size: 12px; margin-left: 8px; font-weight: bold;">
-                  ${pred.orderValue.value.toLocaleString('ro-RO')} RON
-                </span>
-              </div>
+      const words = normalized.split(' ').filter(w => w.length > 2);
 
-              <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #222;">
-                <div style="color: #666; font-size: 10px;">Factori cheie:</div>
-                <div style="font-size: 10px; margin-top: 4px;">
-                  ${pred.purchaseProbability.factors.slice(0, 2).map(f => 
-                    `<div style="color: ${f.startsWith('+') ? '#22c55e' : '#ef4444'};">${f}</div>`
-                  ).join('')}
-                </div>
-              </div>
-            </div>
-          </div>
-        `).join('')}
-      </div>
+      const bigrams = [];
 
-      <div style="margin-top: 24px; padding: 16px; background: rgba(147, 51, 234, 0.1); border-radius: 8px;">
-        <h3 style="color: #9333ea; font-size: 14px; margin-bottom: 8px;">📊 Statistici Predicții</h3>
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; font-size: 12px;">
-          <div>
-            <div style="color: #666;">Probabilitate medie</div>
-            <div style="color: #fff; font-weight: bold;">
-              ${Math.round(predictions.reduce((sum, p) => sum + p.purchaseProbability.probability, 0) / predictions.length)}%
-            </div>
-          </div>
-          <div>
-            <div style="color: #666;">Valoare totală estimată</div>
-            <div style="color: #22c55e; font-weight: bold;">
-              ${predictions.reduce((sum, p) => sum + p.orderValue.value, 0).toLocaleString('ro-RO')} RON
-            </div>
-          </div>
-          <div>
-            <div style="color: #666;">Clienți >70% probabilitate</div>
-            <div style="color: #fff; font-weight: bold;">
-              ${predictions.filter(p => p.purchaseProbability.probability > 70).length}
-            </div>
-          </div>
-          <div>
-            <div style="color: #666;">Încredere medie</div>
-            <div style="color: #fff; font-weight: bold;">
-              ${predictions.filter(p => p.purchaseProbability.confidence === 'high').length} high
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
+      for (let i = 0; i < words.length - 1; i++) {
 
-  return dashboardHTML;
-}
+        bigrams.push(words[i] + ' ' + words[i + 1]);
 
-// Export pentru integrare
-window.MobexpertML = {
-  predictor: window.mlPredictor,
-  generateTopPredictions,
-  renderPredictionsDashboard,
+      }
 
-  // Funcție de integrare principală
-  integrate: function(customersData, containerId = 'mlPredictionsContainer') {
-    console.log('🚀 Inițializare modul ML...');
+      
 
-    // Generează predicții
-    const predictions = generateTopPredictions(customersData, 100);
+      return [...words, ...bigrams];
 
-    // Creează container dacă nu există
-    let container = document.getElementById(containerId);
-    if (!container) {
-      container = document.createElement('div');
-      container.id = containerId;
-      // Inserează după stats cards sau la sfârșit
-      const statsCards = document.getElementById('statsCards');
-      if (statsCards) {
-        statsCards.parentNode.insertBefore(container, statsCards.nextSibling);
-      } else {
-        document.querySelector('.dashboard-gradient .p-8').appendChild(container);
-      }
-    }
+    }
 
-    // Randează dashboard-ul
-    container.innerHTML = renderPredictionsDashboard(predictions);
 
-    console.log('✅ Modul ML integrat cu succes!');
-    console.log(`📊 Generate ${predictions.length} predicții`);
 
-    return predictions;
-  }
+    categorize(productName) {
+
+      const features = this.extractFeatures(productName);
+
+      const scores = {};
+
+      
+
+      for (const [category, patterns] of Object.entries(this.categoryPatterns)) {
+
+        scores[category] = 0;
+
+        for (const pattern of patterns) {
+
+          if (features.some(f => f.includes(pattern))) {
+
+            scores[category] += pattern.split(' ').length; // bigrams score higher
+
+          }
+
+        }
+
+      }
+
+      
+
+      // Get top category
+
+      let maxScore = 0;
+
+      let bestCategory = 'general';
+
+      
+
+      for (const [cat, score] of Object.entries(scores)) {
+
+        if (score > maxScore) {
+
+          maxScore = score;
+
+          bestCategory = cat;
+
+        }
+
+      }
+
+      
+
+      // Calculate confidence
+
+      const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
+
+      const confidence = totalScore > 0 ? maxScore / totalScore : 0;
+
+      
+
+      return {
+
+        category: bestCategory,
+
+        confidence: confidence,
+
+        scores: scores
+
+      };
+
+    }
+
+
+
+    buildClusters(products) {
+
+      const categoryGroups = {};
+
+      
+
+      for (const product of products) {
+
+        const result = this.categorize(product.name);
+
+        if (!categoryGroups[result.category]) {
+
+          categoryGroups[result.category] = [];
+
+        }
+
+        categoryGroups[result.category].push({
+
+          ...product,
+
+          confidence: result.confidence
+
+        });
+
+      }
+
+      
+
+      // Calculate category statistics
+
+      for (const [cat, items] of Object.entries(categoryGroups)) {
+
+        this.clusters.set(cat, {
+
+          items: items,
+
+          avgPrice: items.reduce((sum, i) => sum + i.price, 0) / items.length,
+
+          avgCycle: this.estimatePurchaseCycle(cat),
+
+          seasonality: this.detectSeasonality(items),
+
+          count: items.length
+
+        });
+
+      }
+
+      
+
+      return this.clusters;
+
+    }
+
+
+
+    estimatePurchaseCycle(category) {
+
+      const cycles = {
+
+        'dormitor': 84, 'living': 72, 'bucatarie': 60,
+
+        'birou': 48, 'baie': 36, 'exterior': 24,
+
+        'lenjerie': 12, 'perdele': 36, 'covoare': 48,
+
+        'iluminat': 36, 'arta': 0, 'oglinzi': 60,
+
+        'decoratiuni': 6, 'craciun': 12, 'paste': 12,
+
+        'copii': 18, 'premium': 60, 'eco': 24
+
+      };
+
+      return cycles[category] || 24;
+
+    }
+
+
+
+    detectSeasonality(items) {
+
+      const monthCounts = new Array(12).fill(0);
+
+      items.forEach(item => {
+
+        if (item.date) {
+
+          const month = new Date(item.date).getMonth();
+
+          monthCounts[month]++;
+
+        }
+
+      });
+
+      
+
+      const total = monthCounts.reduce((a, b) => a + b, 0);
+
+      return monthCounts.map(count => count / total);
+
+    }
+
+  }
+
+
+
+  // 2. LSTM MODEL PENTRU PREDICȚII
+
+  class LSTMPredictor {
+
+    constructor() {
+
+      this.model = null;
+
+      this.isTraining = false;
+
+      this.featureScaler = { mean: {}, std: {} };
+
+    }
+
+
+
+    async buildModel() {
+
+      this.model = tf.sequential({
+
+        layers: [
+
+          tf.layers.lstm({
+
+            units: CONFIG.LSTM_UNITS,
+
+            returnSequences: true,
+
+            inputShape: [CONFIG.SEQUENCE_LENGTH, 15] // 15 features
+
+          }),
+
+          tf.layers.dropout({ rate: 0.2 }),
+
+          tf.layers.lstm({
+
+            units: 32,
+
+            returnSequences: false
+
+          }),
+
+          tf.layers.dropout({ rate: 0.2 }),
+
+          tf.layers.dense({
+
+            units: 16,
+
+            activation: 'relu'
+
+          }),
+
+          tf.layers.dense({
+
+            units: 4, // 4 outputs: prob_3m, prob_6m, prob_12m, value
+
+            activation: 'sigmoid'
+
+          })
+
+        ]
+
+      });
+
+
+
+      this.model.compile({
+
+        optimizer: tf.train.adam(0.001),
+
+        loss: 'meanSquaredError',
+
+        metrics: ['mae']
+
+      });
+
+
+
+      return this.model;
+
+    }
+
+
+
+    prepareSequences(customerData) {
+
+      const sequences = [];
+
+      const sortedTransactions = customerData.transactions.sort((a, b) => 
+
+        new Date(a.date) - new Date(b.date)
+
+      );
+
+
+
+      // Create monthly aggregation
+
+      const monthlyData = {};
+
+      sortedTransactions.forEach(t => {
+
+        const date = new Date(t.date);
+
+        const key = date.getFullYear() + '-' + (date.getMonth() + 1);
+
+        if (!monthlyData[key]) {
+
+          monthlyData[key] = {
+
+            value: 0,
+
+            count: 0,
+
+            categories: new Set(),
+
+            avgValue: 0
+
+          };
+
+        }
+
+        monthlyData[key].value += t.value;
+
+        monthlyData[key].count++;
+
+        if (t.category) monthlyData[key].categories.add(t.category);
+
+      });
+
+
+
+      // Convert to sequence
+
+      const months = Object.keys(monthlyData).sort();
+
+      
+
+      if (months.length < CONFIG.SEQUENCE_LENGTH) {
+
+        // Pad with zeros for short sequences
+
+        const padding = CONFIG.SEQUENCE_LENGTH - months.length;
+
+        for (let i = 0; i < padding; i++) {
+
+          sequences.push(this.createFeatureVector(null));
+
+        }
+
+      }
+
+
+
+      // Add actual data
+
+      months.slice(-CONFIG.SEQUENCE_LENGTH).forEach(month => {
+
+        const data = monthlyData[month];
+
+        sequences.push(this.createFeatureVector(data, month));
+
+      });
+
+
+
+      return sequences;
+
+    }
+
+
+
+    createFeatureVector(data, month) {
+
+      if (!data) {
+
+        return new Array(15).fill(0);
+
+      }
+
+
+
+      const date = month ? new Date(month + '-01') : new Date();
+
+      const features = [
+
+        data.value / 10000, // normalized value
+
+        data.count / 10, // normalized count
+
+        data.value / Math.max(data.count, 1) / 5000, // avg value
+
+        data.categories ? data.categories.size / 10 : 0, // category diversity
+
+        Math.sin(2 * Math.PI * date.getMonth() / 12), // seasonal sin
+
+        Math.cos(2 * Math.PI * date.getMonth() / 12), // seasonal cos
+
+        date.getMonth() === 11 ? 1 : 0, // december flag
+
+        date.getMonth() === 0 ? 1 : 0, // january flag
+
+        date.getMonth() === 10 ? 1 : 0, // november (black friday)
+
+        [2, 3, 4].includes(date.getMonth()) ? 1 : 0, // spring
+
+        [5, 6, 7].includes(date.getMonth()) ? 1 : 0, // summer
+
+        [8, 9, 10].includes(date.getMonth()) ? 1 : 0, // autumn
+
+        date.getDay() / 7, // day of week normalized
+
+        date.getDate() / 31, // day of month normalized
+
+        1 // bias term
+
+      ];
+
+
+
+      return features;
+
+    }
+
+
+
+    async predict(customerData) {
+
+      if (!this.model) {
+
+        await this.buildModel();
+
+      }
+
+
+
+      // Check cache
+
+      const cacheKey = customerData.id + '_' + customerData.recency;
+
+      if (predictionCache.has(cacheKey)) {
+
+        return predictionCache.get(cacheKey);
+
+      }
+
+
+
+      const sequences = this.prepareSequences(customerData);
+
+      const input = tf.tensor3d([sequences]);
+
+      
+
+      const prediction = await this.model.predict(input).array();
+
+      input.dispose();
+
+
+
+      const result = {
+
+        probability_3m: Math.round(prediction[0][0] * 100),
+
+        probability_6m: Math.round(prediction[0][1] * 100),
+
+        probability_12m: Math.round(prediction[0][2] * 100),
+
+        estimated_value: Math.round(prediction[0][3] * 50000), // denormalize
+
+        confidence: this.calculateConfidence(customerData),
+
+        factors: this.explainPrediction(customerData, prediction[0])
+
+      };
+
+
+
+      // Cache result
+
+      if (predictionCache.size > CONFIG.CACHE_SIZE) {
+
+        const firstKey = predictionCache.keys().next().value;
+
+        predictionCache.delete(firstKey);
+
+      }
+
+      predictionCache.set(cacheKey, result);
+
+
+
+      return result;
+
+    }
+
+
+
+    calculateConfidence(data) {
+
+      let score = 0;
+
+      
+
+      if (data.transactions.length >= 24) score += 40;
+
+      else if (data.transactions.length >= 12) score += 30;
+
+      else if (data.transactions.length >= 6) score += 20;
+
+      else score += 10;
+
+
+
+      if (data.customer_lifetime > 730) score += 30;
+
+      else if (data.customer_lifetime > 365) score += 20;
+
+      else score += 10;
+
+
+
+      if (data.monetary > 50000) score += 30;
+
+      else if (data.monetary > 20000) score += 20;
+
+      else score += 10;
+
+
+
+      if (score >= 80) return 'high';
+
+      if (score >= 50) return 'medium';
+
+      return 'low';
+
+    }
+
+
+
+    explainPrediction(data, prediction) {
+
+      const factors = [];
+
+      
+
+      // Analyze prediction components
+
+      if (prediction[0] > 0.7) {
+
+        factors.push({ 
+
+          type: 'positive', 
+
+          text: 'Probabilitate foarte mare în 3 luni',
+
+          impact: 'high'
+
+        });
+
+      }
+
+      
+
+      if (prediction[1] > prediction[0]) {
+
+        factors.push({ 
+
+          type: 'neutral', 
+
+          text: 'Pattern de cumpărare la 6 luni',
+
+          impact: 'medium'
+
+        });
+
+      }
+
+
+
+      if (data.recency < 90) {
+
+        factors.push({ 
+
+          type: 'positive', 
+
+          text: 'Client activ recent',
+
+          impact: 'high'
+
+        });
+
+      } else if (data.recency > 365) {
+
+        factors.push({ 
+
+          type: 'negative', 
+
+          text: 'Inactiv de peste 1 an',
+
+          impact: 'high'
+
+        });
+
+      }
+
+
+
+      // Seasonal factors
+
+      const currentMonth = new Date().getMonth();
+
+      if ([10, 11].includes(currentMonth)) {
+
+        factors.push({ 
+
+          type: 'positive', 
+
+          text: 'Sezon de vânzări ridicate',
+
+          impact: 'medium'
+
+        });
+
+      }
+
+
+
+      // Category preferences
+
+      if (data.preferred_categories && data.preferred_categories.includes('premium')) {
+
+        factors.push({ 
+
+          type: 'positive', 
+
+          text: 'Client premium',
+
+          impact: 'high'
+
+        });
+
+      }
+
+
+
+      return factors;
+
+    }
+
+  }
+
+
+
+  // 3. ORCHESTRATOR PRINCIPAL
+
+  class MLOrchestrator {
+
+    constructor() {
+
+      this.categorizer = new ProductCategorizer();
+
+      this.predictor = new LSTMPredictor();
+
+      this.isInitialized = false;
+
+    }
+
+
+
+    async initialize() {
+
+      if (this.isInitialized) return;
+
+      
+
+      await this.predictor.buildModel();
+
+      this.isInitialized = true;
+
+      
+
+      self.postMessage({ 
+
+        type: 'ml_status', 
+
+        message: 'Model LSTM inițializat'
+
+      });
+
+    }
+
+
+
+    async processCustomers(customers, transactions) {
+
+      await this.initialize();
+
+      
+
+      // Step 1: Build product clusters
+
+      self.postMessage({ 
+
+        type: 'ml_progress', 
+
+        percent: 10,
+
+        message: 'Analiză categorii produse...'
+
+      });
+
+
+
+      const products = this.extractProducts(transactions);
+
+      const clusters = this.categorizer.buildClusters(products);
+
+      
+
+      // Step 2: Enhance customer data with ML predictions
+
+      const results = [];
+
+      const batchSize = Math.min(CONFIG.BATCH_SIZE, customers.length);
+
+      
+
+      for (let i = 0; i < customers.length; i += batchSize) {
+
+        const batch = customers.slice(i, i + batchSize);
+
+        
+
+        self.postMessage({ 
+
+          type: 'ml_progress', 
+
+          percent: 10 + (80 * i / customers.length),
+
+          message: \`Predicții LSTM: \${i}/\${customers.length} clienți\`
+
+        });
+
+
+
+        const batchResults = await Promise.all(
+
+          batch.map(async (customer) => {
+
+            // Add category preferences
+
+            customer.preferred_categories = this.getCustomerCategories(
+
+              customer.transactions, 
+
+              clusters
+
+            );
+
+            
+
+            // Get LSTM predictions
+
+            const predictions = await this.predictor.predict(customer);
+
+            
+
+            return {
+
+              ...customer,
+
+              ml_predictions: predictions,
+
+              ml_category: customer.preferred_categories[0] || 'general',
+
+              ml_next_purchase_month: this.predictNextMonth(predictions),
+
+              ml_lifetime_value: this.calculateLTV(customer, predictions)
+
+            };
+
+          })
+
+        );
+
+
+
+        results.push(...batchResults);
+
+      }
+
+
+
+      self.postMessage({ 
+
+        type: 'ml_complete', 
+
+        data: results,
+
+        clusters: Array.from(clusters.entries())
+
+      });
+
+
+
+      return results;
+
+    }
+
+
+
+    extractProducts(transactions) {
+
+      const productMap = new Map();
+
+      
+
+      transactions.forEach(t => {
+
+        if (t.product_name) {
+
+          const key = t.product_name.toLowerCase();
+
+          if (!productMap.has(key)) {
+
+            productMap.set(key, {
+
+              name: t.product_name,
+
+              price: t.value,
+
+              date: t.date,
+
+              count: 1
+
+            });
+
+          } else {
+
+            const existing = productMap.get(key);
+
+            existing.count++;
+
+            existing.price = (existing.price + t.value) / 2;
+
+          }
+
+        }
+
+      });
+
+
+
+      return Array.from(productMap.values());
+
+    }
+
+
+
+    getCustomerCategories(transactions, clusters) {
+
+      const categoryCount = {};
+
+      
+
+      transactions.forEach(t => {
+
+        if (t.product_name) {
+
+          const result = this.categorizer.categorize(t.product_name);
+
+          categoryCount[result.category] = (categoryCount[result.category] || 0) + 1;
+
+        }
+
+      });
+
+
+
+      return Object.keys(categoryCount)
+
+        .sort((a, b) => categoryCount[b] - categoryCount[a])
+
+        .slice(0, 5);
+
+    }
+
+
+
+    predictNextMonth(predictions) {
+
+      if (predictions.probability_3m > 70) return 3;
+
+      if (predictions.probability_6m > 60) return 6;
+
+      if (predictions.probability_12m > 50) return 12;
+
+      return null;
+
+    }
+
+
+
+    calculateLTV(customer, predictions) {
+
+      const avgOrderValue = customer.avg_order_value || 0;
+
+      const expectedOrders = 
+
+        (predictions.probability_3m / 100) + 
+
+        (predictions.probability_6m / 100) * 0.8 + 
+
+        (predictions.probability_12m / 100) * 0.6;
+
+      
+
+      return Math.round(avgOrderValue * expectedOrders * 1.2); // 1.2 growth factor
+
+    }
+
+  }
+
+
+
+  // Main worker handler
+
+  const orchestrator = new MLOrchestrator();
+
+
+
+  self.onmessage = async function(e) {
+
+    const { type, customers, transactions } = e.data;
+
+    
+
+    if (type === 'process_ml') {
+
+      try {
+
+        const results = await orchestrator.processCustomers(customers, transactions);
+
+        self.postMessage({ type: 'ml_complete', data: results });
+
+      } catch (error) {
+
+        self.postMessage({ 
+
+          type: 'ml_error', 
+
+          error: error.message 
+
+        });
+
+      }
+
+    }
+
+  };
+
+`;
+
+
+
+// Funcții de integrare în UI-ul existent
+
+window.MobexpertMLEnhanced = {
+
+  worker: null,
+
+  predictions: new Map(),
+
+
+
+  // Inițializare worker
+
+  init() {
+
+    const blob = new Blob([MLWorkerCode], { type: 'application/javascript' });
+
+    this.worker = new Worker(URL.createObjectURL(blob));
+
+    
+
+    this.worker.onmessage = (e) => {
+
+      if (e.data.type === 'ml_complete') {
+
+        this.handleMLResults(e.data.data);
+
+      } else if (e.data.type === 'ml_progress') {
+
+        this.updateProgress(e.data.percent, e.data.message);
+
+      } else if (e.data.type === 'ml_error') {
+
+        console.error('ML Error:', e.data.error);
+
+      }
+
+    };
+
+  },
+
+
+
+  // Procesare date cu ML
+
+  processWithML(customersData, transactionsData) {
+
+    this.worker.postMessage({
+
+      type: 'process_ml',
+
+      customers: customersData,
+
+      transactions: transactionsData
+
+    });
+
+  },
+
+
+
+  // Handle rezultate ML
+
+  handleMLResults(enhancedData) {
+
+    enhancedData.forEach(customer => {
+
+      this.predictions.set(customer.id, customer.ml_predictions);
+
+    });
+
+
+
+    // Update tabel - adaugă coloane noi
+
+    this.enhanceTableWithML();
+
+    
+
+    // Store pentru popup
+
+    window.mlCustomersData = enhancedData;
+
+  },
+
+
+
+  // Adaugă coloane ML în tabel
+
+  enhanceTableWithML() {
+
+    // Modifică header-ul
+
+    const thead = document.querySelector('.table-dark thead tr');
+
+    if (thead && !document.getElementById('ml-headers')) {
+
+      const mlHeaders = `
+
+        <th id="ml-headers" class="px-2 py-4 text-center">
+
+          <div class="text-purple-400">ML 3L</div>
+
+        </th>
+
+        <th class="px-2 py-4 text-center">
+
+          <div class="text-purple-400">ML 6L</div>
+
+        </th>
+
+        <th class="px-2 py-4 text-center">
+
+          <div class="text-purple-400">ML 12L</div>
+
+        </th>
+
+        <th class="px-2 py-4 text-center">
+
+          <div class="text-purple-400">Val.Est</div>
+
+        </th>
+
+        <th class="px-2 py-4 text-center">
+
+          <div class="text-purple-400">Categorie</div>
+
+        </th>
+
+        <th class="px-2 py-4 text-center">
+
+          <div class="text-purple-400">ML Detail</div>
+
+        </th>
+
+      `;
+
+      thead.insertAdjacentHTML('beforeend', mlHeaders);
+
+    }
+
+  },
+
+
+
+  // Render celule ML pentru fiecare rând
+
+  renderMLCells(customerId) {
+
+    const pred = this.predictions.get(customerId);
+
+    if (!pred) return '<td colspan="6" class="text-gray-500 text-xs">Processing...</td>';
+
+
+
+    const confClass = pred.confidence === 'high' ? 'ml-high' : 
+
+                      pred.confidence === 'medium' ? 'ml-medium' : 'ml-low';
+
+
+
+    return `
+
+      <td class="px-2 py-2 text-center">
+
+        <span class="ml-badge ${pred.probability_3m > 70 ? 'ml-high' : pred.probability_3m > 40 ? 'ml-medium' : 'ml-low'}">
+
+          ${pred.probability_3m}%
+
+        </span>
+
+      </td>
+
+      <td class="px-2 py-2 text-center">
+
+        <span class="ml-badge ${pred.probability_6m > 60 ? 'ml-high' : pred.probability_6m > 35 ? 'ml-medium' : 'ml-low'}">
+
+          ${pred.probability_6m}%
+
+        </span>
+
+      </td>
+
+      <td class="px-2 py-2 text-center">
+
+        <span class="ml-badge ${pred.probability_12m > 50 ? 'ml-high' : pred.probability_12m > 30 ? 'ml-medium' : 'ml-low'}">
+
+          ${pred.probability_12m}%
+
+        </span>
+
+      </td>
+
+      <td class="px-2 py-2 text-center text-green-400 font-bold">
+
+        ${(pred.estimated_value / 1000).toFixed(1)}k
+
+      </td>
+
+      <td class="px-2 py-2 text-center">
+
+        <span class="text-xs text-purple-400">${window.mlCustomersData?.find(c => c.id === customerId)?.ml_category || '-'}</span>
+
+      </td>
+
+      <td class="px-2 py-2 text-center">
+
+        <button onclick="MobexpertMLEnhanced.showMLPopup('${customerId}')" 
+
+                class="pagination-btn px-2 py-1 text-xs rounded">
+
+          🤖 ML
+
+        </button>
+
+      </td>
+
+    `;
+
+  },
+
+
+
+  // Popup detaliat pentru predicții ML
+
+  showMLPopup(customerId) {
+
+    const customer = window.mlCustomersData?.find(c => c.id === customerId);
+
+    if (!customer) return;
+
+
+
+    const pred = customer.ml_predictions;
+
+    const overlay = document.createElement('div');
+
+    overlay.className = 'ml-overlay';
+
+    overlay.onclick = () => overlay.remove();
+
+
+
+    const popup = document.createElement('div');
+
+    popup.className = 'ml-popup';
+
+    popup.onclick = (e) => e.stopPropagation();
+
+
+
+    popup.innerHTML = `
+
+      <div class="flex justify-between items-start mb-4">
+
+        <h2 class="text-xl font-bold text-purple-400">🤖 Analiză ML - Client ${customerId}</h2>
+
+        <button onclick="this.closest('.ml-overlay').remove()" class="text-red-400 hover:text-red-300 text-xl">✕</button>
+
+      </div>
+
+
+
+      <div class="grid grid-cols-2 gap-4 mb-6">
+
+        <div class="bg-black/40 p-4 rounded-lg border border-purple-500/20">
+
+          <h3 class="text-sm font-bold text-purple-300 mb-3">📊 Predicții Probabilitate Cumpărare</h3>
+
+          <div class="space-y-2">
+
+            <div class="flex justify-between items-center">
+
+              <span class="text-gray-400">Următoarele 3 luni:</span>
+
+              <div class="flex items-center gap-2">
+
+                <div class="w-24 bg-gray-800 rounded-full h-2">
+
+                  <div class="h-2 rounded-full ${pred.probability_3m > 70 ? 'bg-green-500' : pred.probability_3m > 40 ? 'bg-yellow-500' : 'bg-red-500'}" 
+
+                       style="width: ${pred.probability_3m}%"></div>
+
+                </div>
+
+                <span class="font-bold text-white">${pred.probability_3m}%</span>
+
+              </div>
+
+            </div>
+
+            <div class="flex justify-between items-center">
+
+              <span class="text-gray-400">Următoarele 6 luni:</span>
+
+              <div class="flex items-center gap-2">
+
+                <div class="w-24 bg-gray-800 rounded-full h-2">
+
+                  <div class="h-2 rounded-full ${pred.probability_6m > 60 ? 'bg-green-500' : pred.probability_6m > 35 ? 'bg-yellow-500' : 'bg-red-500'}" 
+
+                       style="width: ${pred.probability_6m}%"></div>
+
+                </div>
+
+                <span class="font-bold text-white">${pred.probability_6m}%</span>
+
+              </div>
+
+            </div>
+
+            <div class="flex justify-between items-center">
+
+              <span class="text-gray-400">Următoarele 12 luni:</span>
+
+              <div class="flex items-center gap-2">
+
+                <div class="w-24 bg-gray-800 rounded-full h-2">
+
+                  <div class="h-2 rounded-full ${pred.probability_12m > 50 ? 'bg-green-500' : pred.probability_12m > 30 ? 'bg-yellow-500' : 'bg-red-500'}" 
+
+                       style="width: ${pred.probability_12m}%"></div>
+
+                </div>
+
+                <span class="font-bold text-white">${pred.probability_12m}%</span>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+
+        <div class="bg-black/40 p-4 rounded-lg border border-purple-500/20">
+
+          <h3 class="text-sm font-bold text-purple-300 mb-3">💰 Valoare & Categorii</h3>
+
+          <div class="space-y-2 text-sm">
+
+            <div class="flex justify-between">
+
+              <span class="text-gray-400">Valoare estimată:</span>
+
+              <span class="text-green-400 font-bold">${pred.estimated_value.toLocaleString('ro-RO')} RON</span>
+
+            </div>
+
+            <div class="flex justify-between">
+
+              <span class="text-gray-400">Categorie principală:</span>
+
+              <span class="text-purple-400 font-bold">${customer.ml_category}</span>
+
+            </div>
+
+            <div class="flex justify-between">
+
+              <span class="text-gray-400">LTV estimat:</span>
+
+// Continuarea popup-ului ML
+
+              <span class="text-yellow-400 font-bold">${customer.ml_lifetime_value?.toLocaleString('ro-RO') || '0'} RON</span>
+
+            </div>
+
+            <div class="flex justify-between">
+
+              <span class="text-gray-400">Încredere predicție:</span>
+
+              <span class="${pred.confidence === 'high' ? 'text-green-400' : pred.confidence === 'medium' ? 'text-yellow-400' : 'text-red-400'} font-bold">
+
+                ${pred.confidence.toUpperCase()}
+
+              </span>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+
+      <div class="bg-black/40 p-4 rounded-lg border border-purple-500/20 mb-6">
+
+        <h3 class="text-sm font-bold text-purple-300 mb-3">🎯 Factori Cheie & Recomandări</h3>
+
+        <div class="space-y-2">
+
+          ${pred.factors.map(f => `
+
+            <div class="flex items-start gap-2">
+
+              <span class="${f.type === 'positive' ? 'text-green-400' : f.type === 'negative' ? 'text-red-400' : 'text-yellow-400'}">
+
+                ${f.type === 'positive' ? '✅' : f.type === 'negative' ? '⚠️' : 'ℹ️'}
+
+              </span>
+
+              <div>
+
+                <span class="text-gray-300 text-sm">${f.text}</span>
+
+                ${f.impact === 'high' ? '<span class="ml-2 text-xs text-purple-400">(Impact ridicat)</span>' : ''}
+
+              </div>
+
+            </div>
+
+          `).join('')}
+
+        </div>
+
+      </div>
+
+
+
+      <div class="bg-black/40 p-4 rounded-lg border border-purple-500/20">
+
+        <h3 class="text-sm font-bold text-purple-300 mb-3">📈 Categorii Preferate (Top 5)</h3>
+
+        <div class="flex flex-wrap gap-2">
+
+          ${(customer.preferred_categories || []).map(cat => `
+
+            <span class="px-3 py-1 bg-purple-900/30 text-purple-300 rounded-full text-xs border border-purple-500/30">
+
+              ${cat}
+
+            </span>
+
+          `).join('')}
+
+        </div>
+
+      </div>
+
+
+
+      <div class="mt-6 text-xs text-gray-500 text-center">
+
+        Model: LSTM cu 2 layere | Sequence: 24 luni | Features: 15 | Confidence: ${pred.confidence}
+
+      </div>
+
+    `;
+
+
+
+    overlay.appendChild(popup);
+
+    document.body.appendChild(overlay);
+
+  },
+
+
+
+  // Update progress
+
+  updateProgress(percent, message) {
+
+    const loadingText = document.getElementById('loadingText');
+
+    const loadingProgress = document.getElementById('loadingProgress');
+
+    
+
+    if (loadingText) loadingText.textContent = `ML: ${message}`;
+
+    if (loadingProgress) loadingProgress.style.width = `${percent}%`;
+
+  }
+
 };
 
+
+
+// Override funcția renderTable existentă pentru a include ML
+
+const originalRenderTable = window.renderTable;
+
+window.renderTable = function() {
+
+  originalRenderTable();
+
+  
+
+  // Adaugă coloanele ML pentru fiecare rând
+
+  const rows = document.querySelectorAll('#customersTableBody tr');
+
+  rows.forEach((row, idx) => {
+
+    const customerId = row.querySelector('td:nth-child(2)')?.textContent;
+
+    if (customerId) {
+
+      const mlCells = MobexpertMLEnhanced.renderMLCells(customerId);
+
+      row.insertAdjacentHTML('beforeend', mlCells);
+
+    }
+
+  });
+
+};
+
+
+
+// Extinde procesarea CSV pentru a include ML
+
+const originalProcessCsvFiles = window.processCsvFiles;
+
+window.processCsvFiles = function(salesFiles, complaintsFile) {
+
+  // Apelează funcția originală
+
+  originalProcessCsvFiles.call(this, salesFiles, complaintsFile);
+
+  
+
+  // După ce datele sunt procesate, adaugă ML
+
+  setTimeout(() => {
+
+    if (window.customersData && window.customersData.length > 0) {
+
+      // Extrage toate tranzacțiile cu denumiri produse
+
+      const allTransactions = [];
+
+      
+
+      window.customersData.forEach(customer => {
+
+        customer.transactions.forEach(t => {
+
+          allTransactions.push({
+
+            customer_id: customer.id,
+
+            date: t.date,
+
+            value: t.value,
+
+            product_name: t.product_name || 'Unknown' // Trebuie extras din CSV
+
+          });
+
+        });
+
+      });
+
+      
+
+      // Inițializează și procesează cu ML
+
+      MobexpertMLEnhanced.init();
+
+      MobexpertMLEnhanced.processWithML(window.customersData, allTransactions);
+
+    }
+
+  }, 1000);
+
+};
+
+
+
+// Helper pentru extragerea denumirii produselor din CSV
+
+window.extractProductNameFromCSV = function(row) {
+
+  // Caută în coloanele posibile
+
+  const possibleColumns = [
+
+    'DENUMIRE ARTICOL',
+
+    'DENUMIRE_ARTICOL', 
+
+    'Product Name',
+
+    'Product',
+
+    'Articol',
+
+    'Produs'
+
+  ];
+
+  
+
+  for (const col of possibleColumns) {
+
+    if (row[col]) return row[col];
+
+  }
+
+  
+
+  return 'Unknown';
+
+};
+
+
+
+// Modifică parserul CSV pentru a include denumirea produselor
+
+const originalReadAndParseCSV = window.readAndParseCSV;
+
+window.readAndParseCSV = function(file, type) {
+
+  return originalReadAndParseCSV.call(this, file, type).then(data => {
+
+    if (type === 'sales') {
+
+      // Adaugă denumirea produsului la fiecare tranzacție
+
+      return data.map(row => ({
+
+        ...row,
+
+        product_name: extractProductNameFromCSV(row)
+
+      }));
+
+    }
+
+    return data;
+
+  });
+
+};
+
+
+
 // Auto-init când documentul e ready
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    console.log('ML Module Ready pentru integrare');
-  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+
+    console.log('🚀 ML Enhanced Module cu LSTM & Clustering ready');
+
+  });
+
 } else {
-  console.log('ML Module Ready pentru integrare');
+
+  console.log('🚀 ML Enhanced Module cu LSTM & Clustering ready');
+
 }
+
+
+
+// Export global pentru debugging
+
+window.MLDebug = {
+
+  getCache: () => MobexpertMLEnhanced.predictions,
+
+  reprocess: () => {
+
+    if (window.customersData) {
+
+      MobexpertMLEnhanced.processWithML(window.customersData, []);
+
+    }
+
+  },
+
+  testCategory: (productName) => {
+
+    const categorizer = new ProductCategorizer();
+
+    return categorizer.categorize(productName);
+
+  }
+
+};
     
 </script>
 </body>
