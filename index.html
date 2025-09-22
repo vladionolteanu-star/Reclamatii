@@ -519,6 +519,47 @@
     input[type="file"]::-webkit-file-upload-button {
       cursor: pointer;
     }
+    /* Stiluri pentru Dashboard-ul de Predicții */
+.ml-dashboard {
+  background: linear-gradient(145deg, rgba(15, 15, 15, 0.95), rgba(10, 10, 10, 0.98));
+  border: 1px solid rgba(147, 51, 234, 0.2);
+  border-radius: 16px;
+  padding: 24px;
+  margin: 24px 0;
+}
+
+.prediction-card {
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(147, 51, 234, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+  transition: all 0.3s ease;
+}
+
+.prediction-card:hover {
+  border-color: rgba(147, 51, 234, 0.3);
+  transform: translateY(-2px);
+}
+
+.prediction-score {
+  font-size: 2rem;
+  font-weight: bold;
+  background: linear-gradient(135deg, #9333ea, #7c3aed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.category-chip {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  margin: 2px;
+  background: rgba(147, 51, 234, 0.1);
+  border: 1px solid rgba(147, 51, 234, 0.2);
+  color: #9333ea;
+}
   </style>
 </head>
 </head>
@@ -695,6 +736,7 @@
             <p id="statSeasonality" class="text-2xl font-bold text-blue-400">-</p>
           </div>
         </div>
+        <div id="mlPredictionsContainer"></div>
 
         <div class="card-dark rounded-2xl overflow-hidden">
           <div class="p-5 border-b border-gray-800/50 bg-gradient-to-r from-transparent via-green-500/5 to-transparent">
@@ -1658,6 +1700,7 @@ document.getElementById('filterOverduePurchase').addEventListener('change', rend
                     updateStats();
                     renderCharts();
                     document.getElementById('statsCards').style.display = 'grid';
+                  MobexpertML.integrate(customersData);
                     worker.terminate();
                 }
             };
@@ -2323,6 +2366,552 @@ function generateClientStory(customerId) {
     `;
 
     showStoryModal(storyHtml);
+}
+  // ============================================
+// MODUL ML PENTRU PREDICȚII - MOBEXPERT CRM
+// ============================================
+
+class MobexpertMLPredictor {
+  constructor() {
+    this.model = null;
+    this.categoryModel = null;
+    this.seasonalityPatterns = {};
+    this.categoryDictionary = this.buildCategoryDictionary();
+    this.initialized = false;
+  }
+
+  // Dicționar categorii Home & Deco
+  buildCategoryDictionary() {
+    return {
+      // Mobilier principal
+      'canapele': { avg_price: 8500, cycle_months: 84, category: 'mobilier_principal' },
+      'paturi': { avg_price: 6500, cycle_months: 96, category: 'mobilier_principal' },
+      'dulapuri': { avg_price: 7000, cycle_months: 120, category: 'mobilier_principal' },
+      'mese': { avg_price: 4500, cycle_months: 72, category: 'mobilier_principal' },
+
+      // Mobilier mic
+      'scaune': { avg_price: 1200, cycle_months: 48, category: 'mobilier_mic' },
+      'noptiere': { avg_price: 800, cycle_months: 60, category: 'mobilier_mic' },
+      'comode': { avg_price: 2500, cycle_months: 72, category: 'mobilier_mic' },
+      'biblioteci': { avg_price: 3500, cycle_months: 96, category: 'mobilier_mic' },
+
+      // Textile
+      'perne': { avg_price: 150, cycle_months: 12, category: 'textile' },
+      'cuverturi': { avg_price: 450, cycle_months: 24, category: 'textile' },
+      'draperii': { avg_price: 650, cycle_months: 36, category: 'textile' },
+      'covoare': { avg_price: 850, cycle_months: 48, category: 'textile' },
+
+      // Decorațiuni
+      'tablouri': { avg_price: 350, cycle_months: 0, category: 'decoratiuni' },
+      'vaze': { avg_price: 180, cycle_months: 0, category: 'decoratiuni' },
+      'oglinzi': { avg_price: 420, cycle_months: 0, category: 'decoratiuni' },
+      'lumini': { avg_price: 380, cycle_months: 36, category: 'iluminat' }
+    };
+  }
+
+  // Detectează sezonalitate din date istorice
+  detectSeasonality(transactions) {
+    const monthlySpend = {};
+
+    transactions.forEach(t => {
+      const date = new Date(t.date);
+      const month = date.getMonth();
+      monthlySpend[month] = (monthlySpend[month] || 0) + t.value;
+    });
+
+    // Normalizare
+    const total = Object.values(monthlySpend).reduce((a, b) => a + b, 0);
+    const patterns = {};
+
+    for (let month in monthlySpend) {
+      patterns[month] = (monthlySpend[month] / total) * 100;
+    }
+
+    return patterns;
+  }
+
+  // Extrage features pentru model
+  extractFeatures(customer) {
+    const now = new Date('2025-09-22');
+
+    // Features principale
+    const features = {
+      // Temporale
+      recency_days: customer.recency,
+      recency_normalized: Math.min(1, customer.recency / 730), // Max 2 ani
+      lifetime_days: customer.customer_lifetime,
+      avg_interval: customer.avg_purchase_interval || 180,
+
+      // Valoare
+      total_value: customer.monetary,
+      avg_order_value: customer.avg_order_value,
+      value_per_year: customer.monetary / Math.max(1, customer.customer_lifetime / 365),
+
+      // Frecvență
+      invoice_count: customer.invoice_count,
+      frequency_score: Math.min(1, customer.invoice_count / 20),
+
+      // Comportament
+      has_large_purchases: customer.transactions.filter(t => t.value >= 6000).length,
+      has_small_purchases: customer.transactions.filter(t => t.value < 500).length,
+      product_diversity: customer.product_categories || 1,
+
+      // Trend (dacă există)
+      trend_score: customer.trend_monetary || 50,
+      is_declining: customer.trend_monetary < 40 ? 1 : 0,
+      is_growing: customer.trend_monetary > 60 ? 1 : 0,
+
+      // Sezonalitate
+      current_month: now.getMonth(),
+      preferred_season_match: this.getSeasonMatch(customer.preferred_season, now.getMonth()),
+
+      // Reclamații
+      has_complaint: customer.has_complaint ? 1 : 0,
+      lost_after_complaint: customer.no_orders_after_complaint ? 1 : 0
+    };
+
+    return features;
+  }
+
+  // Calculează match sezonalitate
+  getSeasonMatch(preferredSeason, currentMonth) {
+    const seasonMonths = {
+      'Iarnă': [11, 0, 1],
+      'Primăvară': [2, 3, 4],
+      'Vară': [5, 6, 7],
+      'Toamnă': [8, 9, 10]
+    };
+
+    const currentSeason = Object.keys(seasonMonths).find(season =>
+      seasonMonths[season].includes(currentMonth)
+    );
+
+    return preferredSeason === currentSeason ? 1 : 0;
+  }
+
+  // Predicție probabilitate cumpărare (Random Forest simplificat)
+  predictPurchaseProbability(customer) {
+    const features = this.extractFeatures(customer);
+
+    // Model simplificat bazat pe reguli (Random Forest ar fi prea complex pentru browser)
+    let probability = 50; // Start de la 50%
+
+    // Ajustări bazate pe recency
+    if (features.recency_days < 90) {
+      probability += 20;
+    } else if (features.recency_days < 180) {
+      probability += 10;
+    } else if (features.recency_days < 365) {
+      probability -= 10;
+    } else if (features.recency_days < 730) {
+      probability -= 25;
+    } else {
+      probability -= 40;
+    }
+
+    // Ajustări bazate pe frecvență și valoare
+    if (features.invoice_count >= 10) {
+      probability += 15;
+    }
+
+    if (features.avg_order_value > 5000) {
+      probability += 10;
+    }
+
+    // Ajustări pentru trend
+    if (features.is_growing) {
+      probability += 15;
+    } else if (features.is_declining) {
+      probability -= 20;
+    }
+
+    // Ajustări pentru intervalul de cumpărare
+    if (features.avg_interval > 0) {
+      const daysOverdue = features.recency_days - features.avg_interval;
+      if (daysOverdue > -30 && daysOverdue < 30) {
+        probability += 25; // În fereastră optimă
+      } else if (daysOverdue > 60) {
+        probability -= 15; // Întârziat mult
+      }
+    }
+
+    // Penalizare pentru reclamații
+    if (features.lost_after_complaint) {
+      probability -= 30;
+    } else if (features.has_complaint) {
+      probability -= 10;
+    }
+
+    // Match sezonier
+    if (features.preferred_season_match) {
+      probability += 5;
+    }
+
+    // Limitare între 0 și 100
+    probability = Math.max(5, Math.min(95, probability));
+
+    return {
+      probability: Math.round(probability),
+      confidence: this.calculateConfidence(features),
+      factors: this.explainPrediction(features, probability)
+    };
+  }
+
+  // Calculează nivelul de încredere
+  calculateConfidence(features) {
+    let confidence = 'low';
+
+    if (features.invoice_count >= 10 && features.lifetime_days > 365) {
+      confidence = 'high';
+    } else if (features.invoice_count >= 5 && features.lifetime_days > 180) {
+      confidence = 'medium';
+    }
+
+    return confidence;
+  }
+
+  // Explică predicția
+  explainPrediction(features, probability) {
+    const factors = [];
+
+    if (features.recency_days < 180) {
+      factors.push('+ Client activ recent');
+    } else if (features.recency_days > 730) {
+      factors.push('- Inactiv de peste 2 ani');
+    }
+
+    if (features.invoice_count >= 10) {
+      factors.push('+ Istoric solid de achiziții');
+    }
+
+    if (features.is_growing) {
+      factors.push('+ Trend crescător');
+    } else if (features.is_declining) {
+      factors.push('- Trend descrescător');
+    }
+
+    if (features.lost_after_complaint) {
+      factors.push('- Pierdut după reclamație');
+    }
+
+    return factors;
+  }
+
+  // Predicție timing (luna probabilă)
+  predictPurchaseTiming(customer) {
+    const features = this.extractFeatures(customer);
+    const seasonality = this.detectSeasonality(customer.transactions);
+
+    // Găsește lunile cu activitate maximă
+    const topMonths = Object.entries(seasonality)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+
+    // Calculează următoarea lună probabilă
+    const currentMonth = new Date('2025-09-22').getMonth();
+    let nextProbableMonth = currentMonth;
+
+    if (features.avg_interval > 0) {
+      const monthsToAdd = Math.round(features.avg_interval / 30);
+      const lastPurchaseMonth = new Date(customer.last_purchase).getMonth();
+      nextProbableMonth = (lastPurchaseMonth + monthsToAdd) % 12;
+    }
+
+    // Ajustare cu sezonalitate
+    if (seasonality[nextProbableMonth] < 5) { // Dacă luna prezisă are activitate slabă
+      // Alege cea mai apropiată lună cu activitate mare
+      nextProbableMonth = parseInt(topMonths[0][0]);
+    }
+
+    const monthNames = ['Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie',
+                        'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'];
+
+    return {
+      month: monthNames[nextProbableMonth],
+      monthIndex: nextProbableMonth,
+      seasonalityScore: seasonality[nextProbableMonth] || 0,
+      topSeasons: topMonths.map(m => ({
+        month: monthNames[m[0]],
+        score: Math.round(m[1])
+      }))
+    };
+  }
+
+  // Predicție categorii probabile
+  predictCategories(customer) {
+    const purchaseHistory = {};
+
+    // Analizează istoricul
+    customer.transactions.forEach(t => {
+      if (t.value >= 6000) {
+        purchaseHistory['mobilier_principal'] = (purchaseHistory['mobilier_principal'] || 0) + 1;
+      } else if (t.value >= 500) {
+        purchaseHistory['mobilier_mic'] = (purchaseHistory['mobilier_mic'] || 0) + 1;
+      } else {
+        purchaseHistory['decoratiuni'] = (purchaseHistory['decoratiuni'] || 0) + 1;
+      }
+    });
+
+    // Calculează probabilități
+    const total = Object.values(purchaseHistory).reduce((a, b) => a + b, 0);
+    const probabilities = {};
+
+    for (let cat in purchaseHistory) {
+      probabilities[cat] = (purchaseHistory[cat] / total) * 100;
+    }
+
+    // Identifică cicluri de înlocuire
+    const recommendations = [];
+    const lastPurchaseDate = new Date(customer.last_purchase);
+    const monthsSinceLastPurchase = customer.recency / 30;
+
+    // Verifică pentru fiecare categorie
+    if (purchaseHistory['mobilier_principal'] > 0) {
+      if (monthsSinceLastPurchase > 60) { // 5+ ani
+        recommendations.push({
+          category: 'Mobilier Principal',
+          reason: 'Ciclu de înlocuire (5-7 ani)',
+          items: ['Canapea', 'Pat', 'Dulap'],
+          estimatedValue: '6000-12000 RON'
+        });
+      }
+    }
+
+    if (purchaseHistory['mobilier_mic'] > 0) {
+      if (monthsSinceLastPurchase > 36) { // 3+ ani
+        recommendations.push({
+          category: 'Mobilier Mic',
+          reason: 'Reîmprospătare decor',
+          items: ['Scaune', 'Noptiere', 'Comode'],
+          estimatedValue: '1500-3500 RON'
+        });
+      }
+    }
+
+    // Decorațiuni sezoniere
+    const currentMonth = new Date('2025-09-22').getMonth();
+    if ([10, 11, 0].includes(currentMonth)) { // Noiembrie-Ianuarie
+      recommendations.push({
+        category: 'Decorațiuni Sezoniere',
+        reason: 'Sezon sărbători',
+        items: ['Decorațiuni Crăciun', 'Iluminat festiv'],
+        estimatedValue: '300-800 RON'
+      });
+    }
+
+    return {
+      probabilities: probabilities,
+      recommendations: recommendations,
+      preferredCategory: Object.keys(probabilities).reduce((a, b) => 
+        probabilities[a] > probabilities[b] ? a : b
+      )
+    };
+  }
+
+  // Predicție valoare comandă
+  predictOrderValue(customer) {
+    const avgValue = customer.avg_order_value;
+    const trend = customer.trend_monetary || 50;
+
+    // Ajustare bazată pe trend
+    let predictedValue = avgValue;
+
+    if (trend > 60) {
+      predictedValue *= 1.15; // Creștere 15%
+    } else if (trend < 40) {
+      predictedValue *= 0.85; // Scădere 15%
+    }
+
+    // Ajustare bazată pe categorie prezisă
+    const categories = this.predictCategories(customer);
+
+    if (categories.preferredCategory === 'mobilier_principal') {
+      predictedValue = Math.max(predictedValue, 6000);
+    }
+
+    return {
+      value: Math.round(predictedValue),
+      range: {
+        min: Math.round(predictedValue * 0.7),
+        max: Math.round(predictedValue * 1.3)
+      },
+      confidence: avgValue > 0 ? 'medium' : 'low'
+    };
+  }
+
+  // Generează predicții complete pentru un client
+  generatePredictions(customer) {
+    return {
+      customerId: customer.id,
+      purchaseProbability: this.predictPurchaseProbability(customer),
+      timing: this.predictPurchaseTiming(customer),
+      categories: this.predictCategories(customer),
+      orderValue: this.predictOrderValue(customer),
+      generatedAt: new Date().toISOString()
+    };
+  }
+}
+
+// ============================================
+// FUNCȚII DE INTEGRARE CU CRM-UL EXISTENT
+// ============================================
+
+// Instanță globală
+window.mlPredictor = new MobexpertMLPredictor();
+
+// Funcție pentru a genera predicții pentru top N clienți
+function generateTopPredictions(customersData, topN = 100) {
+  // Filtrează clienții relevanți (nu Lost, cu istoric solid)
+  const relevantCustomers = customersData
+    .filter(c => 
+      c.segment !== 'Lost' && 
+      c.invoice_count >= 5 && 
+      c.monetary > 5000
+    )
+    .slice(0, topN);
+
+  const predictions = relevantCustomers.map(customer => 
+    window.mlPredictor.generatePredictions(customer)
+  );
+
+  return predictions;
+}
+
+// Funcție pentru a afișa dashboard-ul de predicții
+function renderPredictionsDashboard(predictions) {
+  const dashboardHTML = `
+    <div class="ml-dashboard">
+      <h2 style="color: #9333ea; font-size: 1.5rem; margin-bottom: 20px;">
+        🤖 Predicții ML - Top Clienți cu Potențial
+      </h2>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
+        ${predictions.slice(0, 20).map(pred => `
+          <div class="prediction-card">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+              <div>
+                <div style="color: #666; font-size: 11px;">CLIENT ID</div>
+                <div style="color: #fff; font-weight: bold;">${pred.customerId}</div>
+              </div>
+              <div class="prediction-score">${pred.purchaseProbability.probability}%</div>
+            </div>
+
+            <div style="border-top: 1px solid #333; padding-top: 12px; margin-top: 12px;">
+              <div style="margin-bottom: 8px;">
+                <span style="color: #9333ea; font-size: 12px;">📅 Timing:</span>
+                <span style="color: #fff; font-size: 12px; margin-left: 8px;">
+                  ${pred.timing.month}
+                </span>
+              </div>
+
+              <div style="margin-bottom: 8px;">
+                <span style="color: #9333ea; font-size: 12px;">🛍️ Categorii probabile:</span>
+                <div style="margin-top: 4px;">
+                  ${pred.categories.recommendations.slice(0, 2).map(rec => 
+                    `<span class="category-chip">${rec.category}</span>`
+                  ).join('')}
+                </div>
+              </div>
+
+              <div style="margin-bottom: 8px;">
+                <span style="color: #9333ea; font-size: 12px;">💰 Valoare estimată:</span>
+                <span style="color: #22c55e; font-size: 12px; margin-left: 8px; font-weight: bold;">
+                  ${pred.orderValue.value.toLocaleString('ro-RO')} RON
+                </span>
+              </div>
+
+              <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #222;">
+                <div style="color: #666; font-size: 10px;">Factori cheie:</div>
+                <div style="font-size: 10px; margin-top: 4px;">
+                  ${pred.purchaseProbability.factors.slice(0, 2).map(f => 
+                    `<div style="color: ${f.startsWith('+') ? '#22c55e' : '#ef4444'};">${f}</div>`
+                  ).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div style="margin-top: 24px; padding: 16px; background: rgba(147, 51, 234, 0.1); border-radius: 8px;">
+        <h3 style="color: #9333ea; font-size: 14px; margin-bottom: 8px;">📊 Statistici Predicții</h3>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; font-size: 12px;">
+          <div>
+            <div style="color: #666;">Probabilitate medie</div>
+            <div style="color: #fff; font-weight: bold;">
+              ${Math.round(predictions.reduce((sum, p) => sum + p.purchaseProbability.probability, 0) / predictions.length)}%
+            </div>
+          </div>
+          <div>
+            <div style="color: #666;">Valoare totală estimată</div>
+            <div style="color: #22c55e; font-weight: bold;">
+              ${predictions.reduce((sum, p) => sum + p.orderValue.value, 0).toLocaleString('ro-RO')} RON
+            </div>
+          </div>
+          <div>
+            <div style="color: #666;">Clienți >70% probabilitate</div>
+            <div style="color: #fff; font-weight: bold;">
+              ${predictions.filter(p => p.purchaseProbability.probability > 70).length}
+            </div>
+          </div>
+          <div>
+            <div style="color: #666;">Încredere medie</div>
+            <div style="color: #fff; font-weight: bold;">
+              ${predictions.filter(p => p.purchaseProbability.confidence === 'high').length} high
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return dashboardHTML;
+}
+
+// Export pentru integrare
+window.MobexpertML = {
+  predictor: window.mlPredictor,
+  generateTopPredictions,
+  renderPredictionsDashboard,
+
+  // Funcție de integrare principală
+  integrate: function(customersData, containerId = 'mlPredictionsContainer') {
+    console.log('🚀 Inițializare modul ML...');
+
+    // Generează predicții
+    const predictions = generateTopPredictions(customersData, 100);
+
+    // Creează container dacă nu există
+    let container = document.getElementById(containerId);
+    if (!container) {
+      container = document.createElement('div');
+      container.id = containerId;
+      // Inserează după stats cards sau la sfârșit
+      const statsCards = document.getElementById('statsCards');
+      if (statsCards) {
+        statsCards.parentNode.insertBefore(container, statsCards.nextSibling);
+      } else {
+        document.querySelector('.dashboard-gradient .p-8').appendChild(container);
+      }
+    }
+
+    // Randează dashboard-ul
+    container.innerHTML = renderPredictionsDashboard(predictions);
+
+    console.log('✅ Modul ML integrat cu succes!');
+    console.log(`📊 Generate ${predictions.length} predicții`);
+
+    return predictions;
+  }
+};
+
+// Auto-init când documentul e ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('ML Module Ready pentru integrare');
+  });
+} else {
+  console.log('ML Module Ready pentru integrare');
 }
     
 </script>
