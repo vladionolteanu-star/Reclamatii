@@ -1713,79 +1713,77 @@ document.getElementById('filterOverduePurchase').addEventListener('change', rend
     // --- START: CONTENT FROM PART 3 SCRIPT ---
     // Process CSV files with Web Worker
     function processCsvFiles(salesFiles, complaintsFile) {
-        showLoading('Inițializare procesare...');
+    showLoading('Inițializare procesare...');
+    
+    Promise.all([
+        ...salesFiles.map(file => readAndParseCSV(file, 'sales')),
+        complaintsFile ? readAndParseCSV(complaintsFile, 'complaints') : Promise.resolve([])
+    ]).then(results => {
+        const complaintsData = complaintsFile ? results.pop() : [];
+        const allSalesData = results.flat();
         
-        Promise.all([
-            ...salesFiles.map(file => readAndParseCSV(file, 'sales')),
-            complaintsFile ? readAndParseCSV(complaintsFile, 'complaints') : Promise.resolve([])
-        ]).then(results => {
-            const complaintsData = complaintsFile ? results[results.length - 1] : [];
-            const allSalesData = results.slice(0, -1).flat();
-            
-            totalTransactions = allSalesData.length;
-            document.getElementById('totalTransactions').textContent = totalTransactions.toLocaleString('ro-RO');
-            
-            const analysisPeriod = document.getElementById('analysisPeriod').value;
-            
-            // Create and run worker
-            const blob = new Blob([fullWorkerCode], { type: 'application/javascript' });
-            const worker = new Worker(URL.createObjectURL(blob));
-            
-            worker.postMessage({
-                salesData: allSalesData,
-                complaintsData: complaintsData,
-                analysisPeriod: analysisPeriod
-            });
-            
-           worker.onmessage = function(e) {
-    if (e.data.type === 'progress') {
-        updateLoading(e.data.text, e.data.details, e.data.percent);
-    } else if (e.data.type === 'complete') {
-        customersData = e.data.data;
-        totalInvoices = e.data.totalInvoices || 0;
-        hideLoading();
-        renderTable();
-        updateStats();
-        renderCharts();
-        document.getElementById('statsCards').style.display = 'grid';
-        worker.terminate();
-
-        // ================================================================
-        // ▼▼▼ BLOCUL DE COD ESTE ACUM PLASAT CORECT, ÎN INTERIOR ▼▼▼
-        // ================================================================
-        console.log('Primul worker a terminat. Se pregătește pornirea worker-ului ML...');
+        totalTransactions = allSalesData.length;
+        document.getElementById('totalTransactions').textContent = totalTransactions.toLocaleString('ro-RO');
         
-        const allTransactions = [];
-// AICI AM ELIMINAT "window."
-customersData.forEach(customer => {
-    if (customer.transactions) {
-        customer.transactions.forEach(t => {
-            allTransactions.push({
-                customer_id: customer.id,
-                date: t.date,
-                value: t.value,
-                product_name: t.product_name || 'Unknown'
-            });
+        const analysisPeriod = document.getElementById('analysisPeriod').value;
+        
+        const blob = new Blob([fullWorkerCode], { type: 'application/javascript' });
+        const worker = new Worker(URL.createObjectURL(blob));
+        
+        worker.postMessage({
+            salesData: allSalesData,
+            complaintsData: complaintsData,
+            analysisPeriod: analysisPeriod
         });
-    }
-});
-
-if (window.MobexpertMLEnhanced) {
-    MobexpertMLEnhanced.init();
-    MobexpertMLEnhanced.processWithML(customersData, allTransactions); // Și aici am eliminat "window."
-}
-            
-            worker.onerror = function(error) {
-                console.error('Worker error:', error);
+        
+        worker.onmessage = function(e) {
+            if (e.data.type === 'progress') {
+                updateLoading(e.data.text, e.data.details, e.data.percent);
+            } else if (e.data.type === 'complete') {
+                customersData = e.data.data;
+                totalInvoices = e.data.totalInvoices || 0;
                 hideLoading();
-                alert('Eroare la procesarea datelor: ' + error.message);
-            };
-        }).catch(error => {
-            console.error('Error processing files:', error);
+                renderTable();
+                updateStats();
+                renderCharts();
+                document.getElementById('statsCards').style.display = 'grid';
+                worker.terminate();
+
+                // Pornirea worker-ului ML
+                console.log('Primul worker a terminat. Se pregătește pornirea worker-ului ML...');
+                
+                const allTransactions = [];
+                customersData.forEach(customer => {
+                    if (customer.transactions) {
+                        customer.transactions.forEach(t => {
+                            allTransactions.push({
+                                customer_id: customer.id,
+                                date: t.date,
+                                value: t.value,
+                                product_name: t.product_name || 'Unknown'
+                            });
+                        });
+                    }
+                });
+                
+                if (window.MobexpertMLEnhanced) {
+                    MobexpertMLEnhanced.init();
+                    MobexpertMLEnhanced.processWithML(customersData, allTransactions);
+                }
+            }
+        };
+        
+        worker.onerror = function(error) {
+            console.error('Worker error:', error);
             hideLoading();
-            alert('Eroare la citirea fișierelor: ' + error.message);
-        });
-    }
+            alert('Eroare la procesarea datelor: ' + error.message);
+        };
+    }).catch(error => {
+        console.error('Error processing files:', error);
+        hideLoading();
+        alert('Eroare la citirea fișierelor: ' + error.message);
+    });
+}
 
 // Read and parse CSV
     function readAndParseCSV(file, type) {
