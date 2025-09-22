@@ -1057,8 +1057,7 @@
             };
           }
           const customer = customerMap[sale.id];
-          customer.transactions.push({ date: saleDate, value: sale.value, invoices: sale.invoices || 1 });
-          customer.total_value += sale.value;
+customer.transactions.push({ date: saleDate, value: sale.value, invoices: sale.invoices || 1, product_name: sale.product_name });          customer.total_value += sale.value;
           customer.unique_days.add(sale.date);
           customer.invoice_count += (sale.invoices || 1);
           totalInvoices += (sale.invoices || 1);
@@ -1738,20 +1737,44 @@ document.getElementById('filterOverduePurchase').addEventListener('change', rend
                 analysisPeriod: analysisPeriod
             });
             
-            worker.onmessage = function(e) {
-                if (e.data.type === 'progress') {
-                    updateLoading(e.data.text, e.data.details, e.data.percent);
-                } else if (e.data.type === 'complete') {
-                    customersData = e.data.data;
-                    totalInvoices = e.data.totalInvoices || 0;
-                    hideLoading();
-                    renderTable();
-                    updateStats();
-                    renderCharts();
-                    document.getElementById('statsCards').style.display = 'grid';
-                    worker.terminate();
-                }
-            };
+           worker.onmessage = function(e) {
+    if (e.data.type === 'progress') {
+        updateLoading(e.data.text, e.data.details, e.data.percent);
+    } else if (e.data.type === 'complete') {
+        customersData = e.data.data;
+        totalInvoices = e.data.totalInvoices || 0;
+        hideLoading();
+        renderTable();
+        updateStats();
+        renderCharts();
+        document.getElementById('statsCards').style.display = 'grid';
+        worker.terminate();
+
+        // ================================================================
+        // ▼▼▼ BLOCUL DE COD ESTE ACUM PLASAT CORECT, ÎN INTERIOR ▼▼▼
+        // ================================================================
+        console.log('Primul worker a terminat. Se pregătește pornirea worker-ului ML...');
+        
+        const allTransactions = [];
+        window.customersData.forEach(customer => {
+            if (customer.transactions) {
+                customer.transactions.forEach(t => {
+                    allTransactions.push({
+                        customer_id: customer.id,
+                        date: t.date,
+                        value: t.value,
+                        product_name: t.product_name || 'Unknown'
+                    });
+                });
+            }
+        });
+        
+        if (window.MobexpertMLEnhanced) {
+            MobexpertMLEnhanced.init();
+            MobexpertMLEnhanced.processWithML(window.customersData, allTransactions);
+        }
+    }
+};
             
             worker.onerror = function(error) {
                 console.error('Worker error:', error);
