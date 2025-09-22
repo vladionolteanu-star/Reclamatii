@@ -1756,25 +1756,24 @@ document.getElementById('filterOverduePurchase').addEventListener('change', rend
         console.log('Primul worker a terminat. Se pregătește pornirea worker-ului ML...');
         
         const allTransactions = [];
-        window.customersData.forEach(customer => {
-            if (customer.transactions) {
-                customer.transactions.forEach(t => {
-                    allTransactions.push({
-                        customer_id: customer.id,
-                        date: t.date,
-                        value: t.value,
-                        product_name: t.product_name || 'Unknown'
-                    });
-                });
-            }
+// AICI AM ELIMINAT "window."
+customersData.forEach(customer => {
+    if (customer.transactions) {
+        customer.transactions.forEach(t => {
+            allTransactions.push({
+                customer_id: customer.id,
+                date: t.date,
+                value: t.value,
+                product_name: t.product_name || 'Unknown'
+            });
         });
-        
-        if (window.MobexpertMLEnhanced) {
-            MobexpertMLEnhanced.init();
-            MobexpertMLEnhanced.processWithML(window.customersData, allTransactions);
-        }
     }
-};
+});
+
+if (window.MobexpertMLEnhanced) {
+    MobexpertMLEnhanced.init();
+    MobexpertMLEnhanced.processWithML(customersData, allTransactions); // Și aici am eliminat "window."
+}
             
             worker.onerror = function(error) {
                 console.error('Worker error:', error);
