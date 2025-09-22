@@ -3841,27 +3841,21 @@ window.MobexpertMLEnhanced = {
 
   // Handle rezultate ML
 
-  handleMLResults(enhancedData) {
+ // Codul corectat
+handleMLResults(enhancedData) {
+    enhancedData.forEach(customer => {
+        this.predictions.set(customer.id, customer.ml_predictions);
+    });
 
-    enhancedData.forEach(customer => {
+    // Update tabel - adaugă coloane noi
+    this.enhanceTableWithML();
 
-      this.predictions.set(customer.id, customer.ml_predictions);
+    // Store pentru popup
+    window.mlCustomersData = enhancedData;
 
-    });
-
-
-
-    // Update tabel - adaugă coloane noi
-
-    this.enhanceTableWithML();
-
-    
-
-    // Store pentru popup
-
-    window.mlCustomersData = enhancedData;
-
-  },
+    // LINIA ADĂUGATĂ: Forțează redesenarea tabelului cu noile date ML
+    renderTable(); 
+},
 
 
 
