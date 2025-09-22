@@ -3050,70 +3050,32 @@ initializePatterns() {
 
 
     async buildModel() {
+    this.model = tf.sequential({
+        layers: [
+            tf.layers.lstm({
+                units: 24, // Redus de la 64
+                returnSequences: false, // Simplificat, nu mai e nevoie de al doilea strat
+                inputShape: [CONFIG.SEQUENCE_LENGTH, 15]
+            }),
+            tf.layers.dropout({ rate: 0.2 }),
+            tf.layers.dense({
+                units: 10, // Simplificat
+                activation: 'relu'
+            }),
+            tf.layers.dense({
+                units: 4, // 4 outputs: prob_3m, prob_6m, prob_12m, value
+                activation: 'sigmoid'
+            })
+        ]
+    });
 
-      this.model = tf.sequential({
+    this.model.compile({
+        optimizer: tf.train.adam(0.005), // Rată de învățare puțin mai mare
+        loss: 'meanSquaredError'
+    });
 
-        layers: [
-
-          tf.layers.lstm({
-
-            units: CONFIG.LSTM_UNITS,
-
-            returnSequences: true,
-
-            inputShape: [CONFIG.SEQUENCE_LENGTH, 15] // 15 features
-
-          }),
-
-          tf.layers.dropout({ rate: 0.2 }),
-
-          tf.layers.lstm({
-
-            units: 32,
-
-            returnSequences: false
-
-          }),
-
-          tf.layers.dropout({ rate: 0.2 }),
-
-          tf.layers.dense({
-
-            units: 16,
-
-            activation: 'relu'
-
-          }),
-
-          tf.layers.dense({
-
-            units: 4, // 4 outputs: prob_3m, prob_6m, prob_12m, value
-
-            activation: 'sigmoid'
-
-          })
-
-        ]
-
-      });
-
-
-
-      this.model.compile({
-
-        optimizer: tf.train.adam(0.001),
-
-        loss: 'meanSquaredError',
-
-        metrics: ['mae']
-
-      });
-
-
-
-      return this.model;
-
-    }
+    return this.model;
+}
 
 
 
