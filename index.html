@@ -3740,40 +3740,24 @@ initializePatterns() {
 
 
   // Main worker handler
+const orchestrator = new MLOrchestrator();
 
-  const orchestrator = new MLOrchestrator();
+self.onmessage = async function(e) {
+    const { type, customers, transactions } = e.data;
 
-
-
-  self.onmessage = async function(e) {
-
-    const { type, customers, transactions } = e.data;
-
-    
-
-    if (type === 'process_ml') {
-
-      try {
-
-        const results = await orchestrator.processCustomers(customers, transactions);
-
-        self.postMessage({ type: 'ml_complete', data: results });
-
-      } catch (error) {
-
-        self.postMessage({ 
-
-          type: 'ml_error', 
-
-          error: error.message 
-
-        });
-
-      }
-
-    }
-
-  };
+    if (type === 'process_ml') {
+        try {
+            const results = await orchestrator.processCustomers(customers, transactions);
+            console.log('DEBUG 2: Worker-ul a terminat. Trimit datele înapoi...'); // <-- Plasat corect
+            self.postMessage({ type: 'ml_complete', data: results });
+        } catch (error) {
+            self.postMessage({ 
+                type: 'ml_error', 
+                error: error.message 
+            });
+        }
+    }
+};
 
 `;
 
@@ -3802,7 +3786,7 @@ window.MobexpertMLEnhanced = {
     this.worker.onmessage = (e) => {
 
       if (e.data.type === 'ml_complete') {
-
+console.log('DEBUG 3: Am primit datele de la worker!', e.data);
         this.handleMLResults(e.data.data);
 
       } else if (e.data.type === 'ml_progress') {
@@ -3824,7 +3808,7 @@ window.MobexpertMLEnhanced = {
   // Procesare date cu ML
 
   processWithML(customersData, transactionsData) {
-
+console.log('DEBUG 1: Pornesc procesarea ML...');
     this.worker.postMessage({
 
       type: 'process_ml',
