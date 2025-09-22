@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="icon" href="data:,">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap');
     
@@ -1765,7 +1766,7 @@ document.getElementById('filterOverduePurchase').addEventListener('change', rend
         });
     }
 
-    // Read and parse CSV
+// Read and parse CSV
     function readAndParseCSV(file, type) {
         return new Promise((resolve, reject) => {
             Papa.parse(file, {
@@ -1774,31 +1775,39 @@ document.getElementById('filterOverduePurchase').addEventListener('change', rend
                 skipEmptyLines: true,
                 complete: function(results) {
                     const data = results.data.map(row => {
+                       if (!row) { // Adăugat pentru siguranță, ignoră rândurile complet goale
+                           return null;
+                       }
                        if (type === 'sales') {
-    // Caută în coloanele posibile pentru numele produsului
-    const extractProductName = (row) => {
-        const possibleColumns = [
-            'DENUMIRE ARTICOL', 'DENUMIRE_ARTICOL', 'Product Name', 
-            'Product', 'Articol', 'Produs'
-        ];
-        for (const col of possibleColumns) {
-            if (row[col]) return row[col];
-        }
-        return 'Unknown';
-    };
+                           const extractProductName = (row) => {
+                               const possibleColumns = [
+                                   'DENUMIRE ARTICOL', 'DENUMIRE_ARTICOL', 'Product Name', 
+                                   'Product', 'Articol', 'Produs'
+                               ];
+                               for (const col of possibleColumns) {
+                                   if (row[col]) return row[col];
+                               }
+                               return 'Unknown';
+                           };
 
-    return {
-        id: row['ID CLIENT'] || row['ID_CLIENT'] || row['Customer ID'] || '',
-        email: row['EMAIL CLIENT'] || row['EMAIL_CLIENT'] || row['Email'] || 'N/A',
-        date: row['DATA'] || row['Date'] || '',
-        value: parseFloat(row['VALOARE FACTURATA'] || row['VALOARE_FACTURATA'] || row['Value'] || 0) || 0,
-        invoices: parseInt(row['NR FACTURI'] || row['NR_FACTURI'] || row['Invoices'] || 1) || 1,
-        store: row['MAGAZIN'] || row['Store'] || 'Unknown',
-        // ADAUGĂM LINIA ESENȚIALĂ PENTRU NUMELE PRODUSULUI
-        product_name: extractProductName(row) 
-    };
-}
-                    }).filter(row => row.id && row.id !== '' && row.id !== 'null');
+                           return {
+                               id: row['ID CLIENT'] || row['ID_CLIENT'] || row['Customer ID'] || '',
+                               email: row['EMAIL CLIENT'] || row['EMAIL_CLIENT'] || row['Email'] || 'N/A',
+                               date: row['DATA'] || row['Date'] || '',
+                               value: parseFloat(row['VALOARE FACTURATA'] || row['VALOARE_FACTURATA'] || row['Value'] || 0) || 0,
+                               invoices: parseInt(row['NR FACTURI'] || row['NR_FACTURI'] || row['Invoices'] || 1) || 1,
+                               store: row['MAGAZIN'] || row['Store'] || 'Unknown',
+                               product_name: extractProductName(row) 
+                           };
+                       } else if (type === 'complaints') {
+                           // ACEASTA ESTE PARTEA NOUĂ CARE REPARĂ EROAREA
+                           return {
+                               id: row['ID CLIENT'] || row['ID_CLIENT'] || row['Customer ID'] || '',
+                               date: row['DATA'] || row['Date'] || ''
+                           };
+                       }
+                       return null; // Asigură-te că returnezi null pentru orice alt caz
+                    }).filter(row => row && row.id && row.id !== '' && row.id !== 'null'); // Filtrul este acum mai sigur
                     resolve(data);
                 },
                 error: function(error) {
